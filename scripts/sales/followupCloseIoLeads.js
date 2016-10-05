@@ -345,23 +345,17 @@ function createSendFollowupMailFn(userApiKeyMap, latestDate, lead, contactEmails
             // TODO: some sort of callback problem that stops the series here
 
             // TODO: manage this status mapping better
-            if (lead.status_label === "Auto Attempt 1") {
-              return updateLeadStatus(lead, "Auto Attempt 2", done);
+            const statusMap = {
+              "Auto Attempt 1": "Auto Attempt 2",
+              "New US Schools Auto Attempt 1": "New US Schools Auto Attempt 2",
+              "Inbound AU Auto Attempt 1": "Inbound AU Auto Attempt 2",
+              "Inbound Canada Auto Attempt 1": "Inbound Canada Auto Attempt 2",
+              "Inbound NZ Auto Attempt 1": "Inbound NZ Auto Attempt 2",
+              "Inbound UK Auto Attempt 1": "Inbound UK Auto Attempt 1 2",
             }
-            else if (lead.status_label === "New US Schools Auto Attempt 1") {
-              return updateLeadStatus(lead, "New US Schools Auto Attempt 2", done);
-            }
-            else if (lead.status_label === "Inbound AU Auto Attempt 1") {
-              return updateLeadStatus(lead, "Inbound AU Auto Attempt 2", done);
-            }
-            else if (lead.status_label === "Inbound Canada Auto Attempt 1") {
-              return updateLeadStatus(lead, "Inbound Canada Auto Attempt 2", done);
-            }
-            else if (lead.status_label === "Inbound NZ Auto Attempt 1") {
-              return updateLeadStatus(lead, "Inbound NZ Auto Attempt 2", done);
-            }
-            else if (lead.status_label === "Inbound UK Auto Attempt 1") {
-              return updateLeadStatus(lead, "Inbound UK Auto Attempt 2", done);
+            const newStatus = statusMap[lead.status_label]
+            if (newStatus) {
+              return updateLeadStatus(lead, newStatus, done);
             }
             else {
               console.log(`ERROR: unknown lead status ${lead.id} ${lead.status_label}`)
