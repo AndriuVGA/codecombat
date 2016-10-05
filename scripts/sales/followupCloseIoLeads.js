@@ -118,9 +118,10 @@ function contactHasPhoneNumbers(contact) {
 
 function lowercaseEmailsForContact(contact) {
   if (contactHasEmailAddress(contact)) {
-    const contactEmails = contact.emails.map((e) => {return e.email.toLowerCase();});
+    return contact.emails.map((e) => {return e.email.toLowerCase();});
+  } else {
+    return [];
   }
-  return contactEmails;
 }
 
 // ** Close.io network requests
