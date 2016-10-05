@@ -114,25 +114,17 @@ function sendMail(toEmail, leadId, contactId, template, emailApiKey, delayMinute
   // console.log('DEBUG: sendMail', toEmail, leadId, contactId, template, emailApiKey, delayMinutes);
 
   // Check for previously sent email
-  const url = `https://${closeIoApiKey}:X@app.close.io/api/v1/activity/email/?lead_id=${leadId}`;
-  request.get(url, (error, response, body) => {
-    if (error) return done(error);
-    try {
-      const data = JSON.parse(body);
-      for (const emailData of data.data) {
-        if (!isSameEmailTemplateType(emailData.template_id, template)) continue;
-        for (const email of emailData.to) {
-          if (email.toLowerCase() === toEmail.toLowerCase()) {
-            console.log("ERROR: sending duplicate email:", toEmail, leadId, contactId, template, emailData.contact_id);
-            return done();
-          }
+  
+  getEmailActivityForLead(leadId, (data) => {
+    if (!data) { return done() };
+    for (const emailData of data.data) {
+      if (!isSameEmailTemplateType(emailData.template_id, template)) continue;
+      for (const email of emailData.to) {
+        if (email.toLowerCase() === toEmail.toLowerCase()) {
+          console.log("ERROR: sending duplicate email:", toEmail, leadId, contactId, template, emailData.contact_id);
+          return done();
         }
       }
-    }
-    catch (err) {
-      console.log(err);
-      console.log(body);
-      return done();
     }
 
     // Send mail
@@ -146,22 +138,7 @@ function sendMail(toEmail, leadId, contactId, template, emailApiKey, delayMinute
       status: 'scheduled',
       date_scheduled: dateScheduled
     };
-    const options = {
-      uri: `https://${emailApiKey}:X@app.close.io/api/v1/activity/email/`,
-      body: JSON.stringify(postData)
-    };
-    request.post(options, (error, response, body) => {
-      if (error) return done(error);
-      const result = JSON.parse(body);
-      if (result.errors || result['field-errors']) {
-        const errorMessage = `Send email POST error for ${toEmail} ${leadId} ${contactId}`;
-        console.error(errorMessage);
-        console.error(body);
-        // console.error(postData);
-        return done(errorMessage);
-      }
-      return done();
-    });
+    postEmailActivity(postData);
   });
 }
 
@@ -207,9 +184,14 @@ function getJsonUrl(url, done) {
   })
 }
 
-function getLeadById(lead_id, done) {
-  const url = `https://${closeIoApiKey}:X@app.close.io/api/v1/lead/?lead_id=${lead_id}`;
-  getJsonUrl(url, (lead) => { return done(lead) });
+function getSomeLeads(options, done) {
+  const getParams = '?' + Object.keys(options).map((key) => {
+    return `${key}=${encodeURIComponent(options[key])}`;
+  }).join('&')
+  const url = `https://${closeIoApiKey}:X@app.close.io/api/v1/lead/${getParams}`;
+  getJsonUrl(url, (results) => {
+    return done(results);
+  })
 }
 
 function getTasksForLead(lead, done) {
@@ -218,7 +200,22 @@ function getTasksForLead(lead, done) {
   getJsonUrl(url, (tasks) => { return done(tasks) });
 }
 
-// TODO: Refactor other places to use this
+function getEmailActivityForLead(lead, done) {
+  const lead_id = lead.id || lead;
+  const url = `https://${closeIoApiKey}:X@app.close.io/api/v1/activity/email/?lead_id=${lead.id}`;
+  getJsonUrl(url, (activity) => {
+    if (!activity) {
+      console.log(`ERROR: ${lead.id} has no activity!`);
+      return done()
+    } else if (activity.has_more) {
+      console.log(`ERROR: ${lead.id} has more activities than returned! Returning nothing instead.`);
+      return done();
+    } else {
+      return done(activity);
+    }
+  })
+}
+
 function getActivityForLead(lead, done) {
   const lead_id = lead.id || lead;
   const url = `https://${closeIoApiKey}:X@app.close.io/api/v1/activity/?lead_id=${lead.id}`;
@@ -232,8 +229,31 @@ function getActivityForLead(lead, done) {
   })
 }
 
+function postEmailActivity(postData, done) {
+  const options = {
+    uri: `https://${emailApiKey}:X@app.close.io/api/v1/activity/email/`,
+    body: JSON.stringify(postData)
+  };
+  request.post(options, (error, response, body) => {
+    if (error) return done(error);
+    const result = JSON.parse(body);
+    if (result.errors || result['field-errors']) {
+      const errorMessage = `Send email POST error for ${toEmail} ${leadId} ${contactId}`;
+      console.error(errorMessage);
+      console.error(body);
+      // console.error(postData);
+      return done(errorMessage);
+    }
+    return done();
+  });
+}
+
 function contactHasEmailAddress(contact) {
   return contact.emails && contact.emails.length > 0;
+}
+
+function contactHasPhoneNumbers(contact) {
+  return contact.phones && contact.phones.length > 0;
 }
 
 function lowercaseEmailsForContact(contact) {
@@ -275,22 +295,8 @@ function createSendFollowupMailFn(userApiKeyMap, latestDate, lead, contactEmails
     // TODO: Refactor into another function
     
     
-    const url = `https://${closeIoApiKey}:X@app.close.io/api/v1/task/?lead_id=${lead.id}`;
-    request.get(url, (error, response, body) => {
-      if (error) {
-        console.log(error);
-        return done();
-      }
-      try {
-        const results = JSON.parse(body);
-        if (results.total_results > 0) {
-          // console.log(`${lead.id} has ${results.total_results} tasks`);
-          return done();
-        }
-      }
-      catch (err) {
-        return done(err);
-      }
+    getTasksForLead(lead, (results) => {
+      if (!results || results.total_results > 0) { return done() }
 
       // Find all lead activities
       getActivityForLead(lead, (results) => {
@@ -401,46 +407,37 @@ function sendSecondFollowupMails(done) {
     const limit = 100;
     const nextPage = (skip) => {
       let has_more = false;
-      const url = `https://${closeIoApiKey}:X@app.close.io/api/v1/lead/?_skip=${skip}&_limit=${limit}&query=${encodeURIComponent(query)}/`;
-      request.get(url, (error, response, body) => {
-        if (error) return done(error);
-        try {
-          const results = JSON.parse(body);
-          if (skip === 0) {
-            console.log(`sendSecondFollowupMails total num leads ${results.total_results} has_more=${results.has_more}`);
-          }
-          has_more = results.has_more;
-          const tasks = [];
-          for (const lead of results.data) {
-            // console.log(`DEBUG: ${lead.id}\t${lead.status_label}\t${lead.name}`);
-            // if (lead.id !== 'lead_W9qq3oZHIAhUCHZkfj4MRcjQoBbgckV6r9HurMszye5') continue;
-            const existingContacts = lead.contacts || [];
-            for (const contact of existingContacts) {
-              if (contactHasEmailAddress(contact)) {
-                if (shouldSendNextAutoEmail(lead, contact)) {
-                  const contactEmails = lowercaseEmailsForContact(contact);
-                  tasks.push(createSendFollowupMailFn(userApiKeyMap, latestDate, lead, contactEmails));
-                }
-                else {
-                  console.log(`Not sending auto-email to lead ${lead.id} contact ${contact.id}`);
-                }
+      getSomeLeads({ _skip: skip, _limit: limit, query: query }, (results) => {
+        if (skip === 0) {
+          console.log(`sendSecondFollowupMails total num leads ${results.total_results} has_more=${results.has_more}`);
+        }
+        has_more = results.has_more;
+        const tasks = [];
+        for (const lead of results.data) {
+          // console.log(`DEBUG: ${lead.id}\t${lead.status_label}\t${lead.name}`);
+          // if (lead.id !== 'lead_W9qq3oZHIAhUCHZkfj4MRcjQoBbgckV6r9HurMszye5') continue;
+          for (const contact of (lead.contacts || [])) {
+            if (contactHasEmailAddress(contact)) {
+              if (shouldSendNextAutoEmail(lead, contact)) {
+                const contactEmails = lowercaseEmailsForContact(contact);
+                tasks.push(createSendFollowupMailFn(userApiKeyMap, latestDate, lead, contactEmails));
               }
               else {
-                console.log(`ERROR: lead ${lead.id} contact ${contact.id} has no email`);
+                console.log(`Not sending auto-email to lead ${lead.id} contact ${contact.id}`);
               }
             }
-          }
-          async.series(tasks, (err, results) => {
-            if (err) return done(err);
-            if (has_more) {
-              return nextPage(skip + limit);
+            else {
+              console.log(`ERROR: lead ${lead.id} contact ${contact.id} has no email`);
             }
-            return done(err);
-          });
+          }
         }
-        catch (err) {
+        async.series(tasks, (err, results) => {
+          if (err) return done(err);
+          if (has_more) {
+            return nextPage(skip + limit);
+          }
           return done(err);
-        }
+        });
       });
     };
     nextPage(0);
@@ -457,7 +454,7 @@ function createAddCallTaskFn(userApiKeyMap, latestDate, lead, email) {
 
     // Skip leads with tasks
     getTasksForLead(lead, (results) => {
-      if (results.total_results > 0) { return done(); }
+      if (!results || results.total_results > 0) { return done(); }
 
       // Find all lead activities
       getActivityForLead(lead, (results) => {
@@ -591,10 +588,9 @@ function addCallTasks(done) {
           for (const lead of results.data) {
             // console.log(`${lead.id}\t${lead.status_label}\t${lead.name}`);
             // if (lead.id !== 'lead_foo') continue;
-            const existingContacts = lead.contacts || [];
-            for (const contact of existingContacts) {
-              if (contact.emails && contact.emails.length > 0) {
-                if (contact.phones && contact.phones.length > 0) {
+            for (const contact of (lead.contacts || [])) {
+              if (contactHasEmailAddress(contact)) {
+                if (contactHasPhoneNumbers(contact)) {
                   tasks.push(createAddCallTaskFn(userApiKeyMap, latestDate, lead, contact.emails[0].email.toLowerCase()));
                 }
               }
@@ -630,7 +626,7 @@ if(module) {module.exports = {
   log: log,
   sendMail: sendMail,
   updateContactStatus: updateContactStatus,
-  getLeadById: getLeadById,
+  getSomeLeads: getSomeLeads,
   getActivityForLead: getActivityForLead,
   shouldSendNextAutoEmail: shouldSendNextAutoEmail,
   createSendFollowupMailFn: createSendFollowupMailFn,
