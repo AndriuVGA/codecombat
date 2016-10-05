@@ -575,42 +575,35 @@ function addCallTasks(done) {
     const limit = 100;
     const nextPage = (skip) => {
       let has_more = false;
-      const url = `https://${closeIoApiKey}:X@app.close.io/api/v1/lead/?_skip=${skip}&_limit=${limit}&query=${encodeURIComponent(query)}/`;
-      request.get(url, (error, response, body) => {
-        if (error) return done(error);
-        try {
-          const results = JSON.parse(body);
-          if (skip === 0) {
-            console.log(`addCallTasks total num leads ${results.total_results} has_more=${results.has_more}`);
-          }
-          has_more = results.has_more;
-          const tasks = [];
-          for (const lead of results.data) {
-            // console.log(`${lead.id}\t${lead.status_label}\t${lead.name}`);
-            // if (lead.id !== 'lead_foo') continue;
-            for (const contact of (lead.contacts || [])) {
-              if (contactHasEmailAddress(contact)) {
-                if (contactHasPhoneNumbers(contact)) {
-                  tasks.push(createAddCallTaskFn(userApiKeyMap, latestDate, lead, contact.emails[0].email.toLowerCase()));
-                }
-              }
-              else {
-                console.log(`ERROR: lead ${lead.id} contact ${contact.id} has no email`);
-              }
-            }
-            // if (tasks.length > 1) break;
-          }
-          async.series(tasks, (err, results) => {
-            if (err) return done(err);
-            if (has_more) {
-              return nextPage(skip + limit);
-            }
-            return done(err);
-          });
+      getSomeLeads({ _skip: skip, _limit: limit, query: query }, (results) => {
+        if (!results || !results.data) { return done() }
+        if (skip === 0) {
+          console.log(`addCallTasks total num leads ${results.total_results} has_more=${results.has_more}`);
         }
-        catch (err) {
+        has_more = results.has_more;
+        const tasks = [];
+        for (const lead of results.data) {
+          // console.log(`${lead.id}\t${lead.status_label}\t${lead.name}`);
+          // if (lead.id !== 'lead_foo') continue;
+          for (const contact of (lead.contacts || [])) {
+            if (contactHasEmailAddress(contact)) {
+              if (contactHasPhoneNumbers(contact)) {
+                tasks.push(createAddCallTaskFn(userApiKeyMap, latestDate, lead, contact.emails[0].email.toLowerCase()));
+              }
+            }
+            else {
+              console.log(`ERROR: lead ${lead.id} contact ${contact.id} has no email`);
+            }
+          }
+          // if (tasks.length > 1) break;
+        }
+        async.series(tasks, (err, results) => {
+          if (err) return done(err);
+          if (has_more) {
+            return nextPage(skip + limit);
+          }
           return done(err);
-        }
+        });
       });
     };
     nextPage(0);
