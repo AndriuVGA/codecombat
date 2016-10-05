@@ -292,26 +292,22 @@ function createSendFollowupMailFn(userApiKeyMap, latestDate, lead, contactEmails
     // console.log("DEBUG: sendFollowupMail", lead.id);
 
     // Skip leads with tasks
-    // TODO: Refactor into another function
-    
-    
     getTasksForLead(lead, (results) => {
       if (!results || results.total_results > 0) { return done() }
 
       // Find all lead activities
       getActivityForLead(lead, (results) => {
         let firstMailActivity;
-        for (const activity of results.data) {
-          if (activity._type === 'Email' && contactEmails.indexOf(activity.to[0].toLowerCase() >= 0)) {
-            if (isTemplateAuto1(activity.template_id)) {
-              if (firstMailActivity) {
-                console.log(`ERROR: ${lead.id} sent multiple auto1 emails!?`);
-                return done();
-              }
-              firstMailActivity = activity;
-            }
-          }
+        const auto1Emails = results.data.filter((activity) => {
+          return activity._type === 'Email'
+                 && contactEmails.indexOf(activity.to[0].toLowerCase()) >= 0
+                 && isTemplateAuto1(activity.template_id);
+        })
+        if (auto1Emails.length > 1) {
+          console.log(`ERROR: ${lead.id} sent multiple auto1 emails!?`);
+          return done();
         }
+        const firstMailActivity = auto1Emails[0];
 
         if (!firstMailActivity) {
           console.log(`ERROR: No first auto mail sent for ${lead.id}`);
@@ -323,14 +319,12 @@ function createSendFollowupMailFn(userApiKeyMap, latestDate, lead, contactEmails
         }
 
         // Find activity since first auto mail, that's not email to a different contact's email
-        let recentActivity;
-        for (const activity of results.data) {
-          if (activity.id === firstMailActivity.id) continue;
-          if (new Date(firstMailActivity.date_created) > new Date(activity.date_created)) continue;
-          if (activity._type === 'Email' && contactEmails.indexOf(activity.to[0].toLowerCase() < 0)) continue;
-          recentActivity = activity;
-          break;
-        }
+        const recentActivity = results.data.find((activity) => {
+          return activity.id !== firstMailActivity.id
+                 && activity._type === 'Email'
+                 && contactEmails.indexOf(activity.to[0].toLowerCase()) < 0
+                 && new Date(activity.date_created) >= new Date(firstMailActivity.date_created)
+        })
 
         if (!recentActivity) {
           let template = getRandomEmailTemplateAuto2(firstMailActivity.template_id);
