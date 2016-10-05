@@ -248,6 +248,25 @@ function postEmailActivity(postData, done) {
   });
 }
 
+function postTask(postData, done) {
+  const options = {
+    uri: `https://${closeIoApiKey}:X@app.close.io/api/v1/task/`,
+    body: JSON.stringify(postData)
+  };
+  request.post(options, (error, response, body) => {
+    if (error) return done(error);
+    const result = JSON.parse(body);
+    if (result.errors || result['field-errors']) {
+      const errorMessage = `Create call task POST error for ${email} ${lead.id}`;
+      console.error(errorMessage);
+      // console.error(body);
+      // console.error(postData);
+      return done(errorMessage);
+    }
+    return done();
+  });
+}
+
 function contactHasEmailAddress(contact) {
   return contact.emails && contact.emails.length > 0;
 }
@@ -508,22 +527,10 @@ function createAddCallTaskFn(userApiKeyMap, latestDate, lead, email) {
             text: `Call ${email}`,
             is_complete: false
           };
-          const options = {
-            uri: `https://${closeIoApiKey}:X@app.close.io/api/v1/task/`,
-            body: JSON.stringify(postData)
-          };
-          request.post(options, (error, response, body) => {
-            if (error) return done(error);
-            const result = JSON.parse(body);
-            if (result.errors || result['field-errors']) {
-              const errorMessage = `Create call task POST error for ${email} ${lead.id}`;
-              console.error(errorMessage);
-              // console.error(body);
-              // console.error(postData);
-              return done(errorMessage);
-            }
-            return done();
-          });
+          
+          postTask(postData, (results) => {
+            return done(results);
+          })
         }
         else {
           // console.log(`DEBUG: Found recent activity after auto2 mail for ${lead.id} ${email}`);
