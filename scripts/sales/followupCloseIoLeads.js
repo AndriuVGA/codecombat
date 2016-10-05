@@ -108,64 +108,7 @@ function log(str) {
   console.log(new Date().toISOString() + " " + str);
 }
 
-// ** Close.io methods
-
-function sendMail(toEmail, leadId, contactId, template, emailApiKey, delayMinutes, done) {
-  // console.log('DEBUG: sendMail', toEmail, leadId, contactId, template, emailApiKey, delayMinutes);
-
-  // Check for previously sent email
-  
-  getEmailActivityForLead(leadId, (data) => {
-    if (!data) { return done() };
-    for (const emailData of data.data) {
-      if (!isSameEmailTemplateType(emailData.template_id, template)) continue;
-      for (const email of emailData.to) {
-        if (email.toLowerCase() === toEmail.toLowerCase()) {
-          console.log("ERROR: sending duplicate email:", toEmail, leadId, contactId, template, emailData.contact_id);
-          return done();
-        }
-      }
-    }
-
-    // Send mail
-    const dateScheduled = new Date();
-    dateScheduled.setUTCMinutes(dateScheduled.getUTCMinutes() + delayMinutes);
-    const postData = {
-      to: [toEmail],
-      contact_id: contactId,
-      lead_id: leadId,
-      template_id: template,
-      status: 'scheduled',
-      date_scheduled: dateScheduled
-    };
-    postEmailActivity(postData);
-  });
-}
-
-function updateLeadStatus(lead, status, done) {
-  // console.log(`DEBUG: updateLeadStatus ${lead.id} ${status}`);
-  const putData = {status: status};
-  const options = {
-    uri: `https://${closeIoApiKey}:X@app.close.io/api/v1/lead/${lead.id}/`,
-    body: JSON.stringify(putData)
-  };
-  request.put(options, (error, response, body) => {
-    if (error) return done(error);
-    try {
-      const result = JSON.parse(body);
-      if (result.errors || result['field-errors']) {
-        console.log(`Update existing lead status PUT error for ${lead.id}`);
-        console.log(body);
-        return done(result.errors || result['field-errors']);
-      }
-      return done();
-    }
-    catch (err) {
-      console.log(body);
-      return done(err);
-    }
-  });
-}
+// ** Close.io network requests
 
 function getJsonUrl(url, done) {
   request.get(url, (error, response, body) => {
@@ -264,6 +207,65 @@ function postTask(postData, done) {
       return done(errorMessage);
     }
     return done();
+  });
+}
+
+// ** Close.io logic
+
+function sendMail(toEmail, leadId, contactId, template, emailApiKey, delayMinutes, done) {
+  // console.log('DEBUG: sendMail', toEmail, leadId, contactId, template, emailApiKey, delayMinutes);
+
+  // Check for previously sent email
+  
+  getEmailActivityForLead(leadId, (data) => {
+    if (!data) { return done() };
+    for (const emailData of data.data) {
+      if (!isSameEmailTemplateType(emailData.template_id, template)) continue;
+      for (const email of emailData.to) {
+        if (email.toLowerCase() === toEmail.toLowerCase()) {
+          console.log("ERROR: sending duplicate email:", toEmail, leadId, contactId, template, emailData.contact_id);
+          return done();
+        }
+      }
+    }
+
+    // Send mail
+    const dateScheduled = new Date();
+    dateScheduled.setUTCMinutes(dateScheduled.getUTCMinutes() + delayMinutes);
+    const postData = {
+      to: [toEmail],
+      contact_id: contactId,
+      lead_id: leadId,
+      template_id: template,
+      status: 'scheduled',
+      date_scheduled: dateScheduled
+    };
+    postEmailActivity(postData);
+  });
+}
+
+function updateLeadStatus(lead, status, done) {
+  // console.log(`DEBUG: updateLeadStatus ${lead.id} ${status}`);
+  const putData = {status: status};
+  const options = {
+    uri: `https://${closeIoApiKey}:X@app.close.io/api/v1/lead/${lead.id}/`,
+    body: JSON.stringify(putData)
+  };
+  request.put(options, (error, response, body) => {
+    if (error) return done(error);
+    try {
+      const result = JSON.parse(body);
+      if (result.errors || result['field-errors']) {
+        console.log(`Update existing lead status PUT error for ${lead.id}`);
+        console.log(body);
+        return done(result.errors || result['field-errors']);
+      }
+      return done();
+    }
+    catch (err) {
+      console.log(body);
+      return done(err);
+    }
   });
 }
 
