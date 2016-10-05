@@ -108,6 +108,21 @@ function log(str) {
   console.log(new Date().toISOString() + " " + str);
 }
 
+function contactHasEmailAddress(contact) {
+  return contact.emails && contact.emails.length > 0;
+}
+
+function contactHasPhoneNumbers(contact) {
+  return contact.phones && contact.phones.length > 0;
+}
+
+function lowercaseEmailsForContact(contact) {
+  if (contactHasEmailAddress(contact)) {
+    const contactEmails = contact.emails.map((e) => {return e.email.toLowerCase();});
+  }
+  return contactEmails;
+}
+
 // ** Close.io network requests
 
 function getJsonUrl(url, done) {
@@ -267,21 +282,6 @@ function updateLeadStatus(lead, status, done) {
       return done(err);
     }
   });
-}
-
-function contactHasEmailAddress(contact) {
-  return contact.emails && contact.emails.length > 0;
-}
-
-function contactHasPhoneNumbers(contact) {
-  return contact.phones && contact.phones.length > 0;
-}
-
-function lowercaseEmailsForContact(contact) {
-  if (contactHasEmailAddress(contact)) {
-    const contactEmails = contact.emails.map((e) => {return e.email.toLowerCase();});
-  }
-  return contactEmails;
 }
 
 function shouldSendNextAutoEmail(lead, contact) {
