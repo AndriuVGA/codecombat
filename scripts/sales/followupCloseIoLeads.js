@@ -1,6 +1,11 @@
 // Follow up on Close.io leads
 
 'use strict';
+const wrap = require('co');
+const request = require('request');
+const Promise = require('bluebird');
+Promise.promisifyAll(request)//, {multiArgs: true})
+
 if (process.argv.length !== 7) {
   log("Usage: node <script> <Close.io general API key> <Close.io mail API key1> <Close.io mail API key2> <Close.io mail API key3>");
 } else {
@@ -126,104 +131,74 @@ function lowercaseEmailsForContact(contact) {
 
 // ** Close.io network requests
 
-function getJsonUrl(url, done) {
-  request.get(url, (error, response, body) => {
-    if (error) {
-      console.log(error);
-      return done();
-    }
-    try {
-      const jsonData = JSON.parse(body);
-      return done(jsonData);
-    }
-    catch (err) {
-      console.log("Error parsing JSON response: ", err);
-      return done();
-    }
-  })
-}
+const getJsonUrl = wrap(function* (url) {
+  console.log("Gettin' a URL!", url);
+  const response = yield request.getAsync({url:url, json: true});
+  console.log(response);
+  return response.body;
+})
 
-function getSomeLeads(options, done) {
+function getSomeLeads (options) {
   const getParams = '?' + Object.keys(options).map((key) => {
     return `${key}=${encodeURIComponent(options[key])}`;
   }).join('&')
   const url = `https://${closeIoApiKey}:X@app.close.io/api/v1/lead/${getParams}`;
-  getJsonUrl(url, (results) => {
-    return done(results);
-  })
+  return getJsonUrlAsync(url);
 }
 
-function getTasksForLead(lead, done) {
+function getTasksForLead(lead) {
   const lead_id = lead.id || lead;
   const url = `https://${closeIoApiKey}:X@app.close.io/api/v1/task/?lead_id=${lead.id}`;
-  getJsonUrl(url, (tasks) => { return done(tasks) });
+  return getJsonUrl(url);
 }
 
 function getEmailActivityForLead(lead, done) {
   const lead_id = lead.id || lead;
   const url = `https://${closeIoApiKey}:X@app.close.io/api/v1/activity/email/?lead_id=${lead.id}`;
-  getJsonUrl(url, (activity) => {
-    if (!activity) {
-      console.log(`ERROR: ${lead.id} has no activity!`);
-      return done()
-    } else if (activity.has_more) {
-      console.log(`ERROR: ${lead.id} has more activities than returned! Returning nothing instead.`);
-      return done();
-    } else {
-      return done(activity);
-    }
-  })
+  const activity = getJsonUrl(url);
+  if (!activity) {
+    throw(`ERROR: ${lead.id} has no activity!`); // TODO: sanity check
+  } else if (activity.has_more) {
+    throw(`ERROR: ${lead.id} has more activities than returned!`); // TODO: sanity check
+  } else {
+    return activity;
+  }
 }
 
 function getActivityForLead(lead, done) {
   const lead_id = lead.id || lead;
   const url = `https://${closeIoApiKey}:X@app.close.io/api/v1/activity/?lead_id=${lead.id}`;
-  getJsonUrl(url, (activity) => {
-    if (activity.has_more) {
-      console.log(`ERROR: ${lead.id} has more activities than returned! Returning nothing instead.`);
-      return done();
-    } else {
-      return done(activity);
-    }
-  })
+  const activity = getJsonUrl(url);
+  if (activity.has_more) {
+    throw(`ERROR: ${lead.id} has more activities than returned! Returning nothing instead.`);
+  } else {
+    return activity;
+  }
 }
 
-function postEmailActivity(postData, done) {
+const postJsonUrl = wrap(function*(options) {
+  const response = yield request.postAsync(options);
+  if (response.body.errors || response.body['field-errors']) {
+    throw(`ERROR: Close.io API returned an error.`);
+  }
+  return response.body;
+})
+
+function postEmailActivity(postData) {
   const options = {
     uri: `https://${emailApiKey}:X@app.close.io/api/v1/activity/email/`,
-    body: JSON.stringify(postData)
+    json: postData
   };
-  request.post(options, (error, response, body) => {
-    if (error) return done(error);
-    const result = JSON.parse(body);
-    if (result.errors || result['field-errors']) {
-      const errorMessage = `Send email POST error for ${toEmail} ${leadId} ${contactId}`;
-      console.error(errorMessage);
-      console.error(body);
-      // console.error(postData);
-      return done(errorMessage);
-    }
-    return done();
-  });
-}
+  
+  postJsonUrl(options);
+})
 
-function postTask(postData, done) {
+function postTask(postData) {
   const options = {
     uri: `https://${closeIoApiKey}:X@app.close.io/api/v1/task/`,
-    body: JSON.stringify(postData)
+    json: postData
   };
-  request.post(options, (error, response, body) => {
-    if (error) return done(error);
-    const result = JSON.parse(body);
-    if (result.errors || result['field-errors']) {
-      const errorMessage = `Create call task POST error for ${email} ${lead.id}`;
-      console.error(errorMessage);
-      // console.error(body);
-      // console.error(postData);
-      return done(errorMessage);
-    }
-    return done();
-  });
+  postJsonUrl(options);
 }
 
 // ** Close.io logic
@@ -256,7 +231,11 @@ function sendMail(toEmail, leadId, contactId, template, emailApiKey, delayMinute
       status: 'scheduled',
       date_scheduled: dateScheduled
     };
-    postEmailActivity(postData);
+    try {
+      postEmailActivity(postData);
+    } catch {
+      throw(`Send email POST error for ${toEmail} ${leadId} ${contactId}`);
+    }
   });
 }
 
@@ -530,9 +509,11 @@ function createAddCallTaskFn(userApiKeyMap, latestDate, lead, email) {
             is_complete: false
           };
           
-          postTask(postData, (results) => {
-            return done(results);
-          })
+          try {
+            postTask(postData);
+          } catch {
+            throw(`Create call task POST error for ${email} ${lead.id}`);
+          }
         }
         else {
           // console.log(`DEBUG: Found recent activity after auto2 mail for ${lead.id} ${email}`);
