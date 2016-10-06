@@ -109,11 +109,11 @@ function log(str) {
 }
 
 function contactHasEmailAddress(contact) {
-  return contact.emails && contact.emails.length > 0;
+  return Boolean(contact.emails && contact.emails.length > 0);
 }
 
 function contactHasPhoneNumbers(contact) {
-  return contact.phones && contact.phones.length > 0;
+  return Boolean(contact.phones && contact.phones.length > 0);
 }
 
 function lowercaseEmailsForContact(contact) {
@@ -319,7 +319,6 @@ function createSendFollowupMailFn(userApiKeyMap, latestDate, lead, contactEmails
 
       // Find all lead activities
       getActivityForLead(lead, (results) => {
-        let firstMailActivity;
         const auto1Emails = results.data.filter((activity) => {
           return activity._type === 'Email'
                  && contactEmails.indexOf(activity.to[0].toLowerCase()) >= 0
@@ -615,10 +614,18 @@ if(module) {module.exports = {
   isTemplateAuto1: isTemplateAuto1,
   isTemplateAuto2: isTemplateAuto2,
   log: log,
-  sendMail: sendMail,
-  updateContactStatus: updateContactStatus,
+  contactHasEmailAddress: contactHasEmailAddress,
+  contactHasPhoneNumbers: contactHasPhoneNumbers,
+  lowercaseEmailsForContact: lowercaseEmailsForContact,
+  getJsonUrl: getJsonUrl,
   getSomeLeads: getSomeLeads,
+  getTasksForLead: getTasksForLead,
+  getEmailActivityForLead: getEmailActivityForLead,
   getActivityForLead: getActivityForLead,
+  postEmailActivity: postEmailActivity,
+  postTask: postTask,
+  sendMail: sendMail,
+  updateLeadStatus: updateLeadStatus,
   shouldSendNextAutoEmail: shouldSendNextAutoEmail,
   createSendFollowupMailFn: createSendFollowupMailFn,
   sendSecondFollowupMails: sendSecondFollowupMails,
