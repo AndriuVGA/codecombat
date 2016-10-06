@@ -184,21 +184,28 @@ const postJsonUrl = wrap(function*(options) {
   return response.body;
 })
 
+const putJsonUrl = wrap(function*(options) {
+  const response = yield request.putAsync(options);
+  if (response.body.errors || response.body['field-errors']) {
+    throw(`ERROR: Close.io API returned an error.`);
+  }
+  return response.body;
+})
+
 function postEmailActivity(postData) {
   const options = {
     uri: `https://${emailApiKey}:X@app.close.io/api/v1/activity/email/`,
     json: postData
   };
-  
-  postJsonUrl(options);
-})
+  return postJsonUrl(options);
+}
 
 function postTask(postData) {
   const options = {
     uri: `https://${closeIoApiKey}:X@app.close.io/api/v1/task/`,
     json: postData
   };
-  postJsonUrl(options);
+  return postJsonUrl(options);
 }
 
 // ** Close.io logic
@@ -231,55 +238,43 @@ function sendMail(toEmail, leadId, contactId, template, emailApiKey, delayMinute
     date_scheduled: dateScheduled
   };
   try {
-    postEmailActivity(postData);
-  } catch {
+    return postEmailActivity(postData);
+  } catch (error) {
     throw(`Send email POST error for ${toEmail} ${leadId} ${contactId}`);
   }
 }
 
-function updateLeadStatus(lead, status, done) {
+function updateLeadStatus(lead, status) {
   // console.log(`DEBUG: updateLeadStatus ${lead.id} ${status}`);
   const putData = {status: status};
   const options = {
     uri: `https://${closeIoApiKey}:X@app.close.io/api/v1/lead/${lead.id}/`,
-    body: JSON.stringify(putData)
+    json: putData
   };
-  request.put(options, (error, response, body) => {
-    if (error) return done(error);
-    try {
-      const result = JSON.parse(body);
-      if (result.errors || result['field-errors']) {
-        console.log(`Update existing lead status PUT error for ${lead.id}`);
-        console.log(body);
-        return done(result.errors || result['field-errors']);
-      }
-      return done();
-    }
-    catch (err) {
-      console.log(body);
-      return done(err);
-    }
-  });
+  try {
+    return putJsonUrl(options);
+  } catch (error) {
+    throw(`Update existing lead status PUT error for ${lead.id}`);
+  }
 }
 
 function shouldSendNextAutoEmail(lead, contact) {
-  getActivityForLead(lead, (activity) => {
-    if(!activity) {
-      console.log(`No activities found for lead ${lead.id} — will not try to sent more auto-emails.`);
-      return false;
-    }
-    activity.data.sort(function(a,b){ return new Date(a.date_updated) < new Date(b.date_updated) });
-    const emails = activity.filter(function(act){ return act._type === 'Email' });
-    const emailAddresses = lowercaseEmailsForContact(contact);
-    const they_have_replied = emails.some((emailData) => {
-      return emailAddresses.some((emailAddress) => {
-        return emailData.sender.match(new RegExp(emailAddress, 'i'));
-      });
+  const activity = getActivityForLead(lead);
+  if(!activity) {
+    console.log(`No activities found for lead ${lead.id} — will not try to sent more auto-emails.`);
+    return false;
+  }
+  activity.data.sort((a,b) => { return new Date(a.date_updated) < new Date(b.date_updated) });
+  const emails = activity.filter((act) => { return act._type === 'Email' });
+  const emailAddresses = lowercaseEmailsForContact(contact);
+  const they_have_replied = emails.some((emailData) => {
+    return emailAddresses.some((emailAddress) => {
+      return emailData.sender.match(new RegExp(emailAddress, 'i'));
     });
-    // TODO: Stop auto-emails if we send them an email or call them.
-    // const we_have_sent_manually = emails.some(function(email){ return ??? });
-    return !they_have_replied // && !we_have_sent_manually
-  })
+  });
+  // TODO: Stop auto-emails if we send them an email or call them.
+  // const we_have_sent_manually = emails.some(function(email){ return ??? });
+  return !they_have_replied // && !we_have_sent_manually
 }
 
 function createSendFollowupMailFn(userApiKeyMap, latestDate, lead, contactEmails) {
@@ -507,7 +502,7 @@ function createAddCallTaskFn(userApiKeyMap, latestDate, lead, email) {
           
           try {
             postTask(postData);
-          } catch {
+          } catch (error) {
             throw(`Create call task POST error for ${email} ${lead.id}`);
           }
         }
