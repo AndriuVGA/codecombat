@@ -543,7 +543,7 @@ function createAddCallTaskFn(userApiKeyMap, latestDate, lead, email) {
       
       });
     });
-  });
+  }
 }
 
 function addCallTasks(done) {
