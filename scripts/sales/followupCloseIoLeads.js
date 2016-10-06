@@ -152,7 +152,7 @@ function getTasksForLead(lead) {
   return getJsonUrl(url);
 }
 
-function getEmailActivityForLead(lead, done) {
+function getEmailActivityForLead(lead) {
   const lead_id = lead.id || lead;
   const url = `https://${closeIoApiKey}:X@app.close.io/api/v1/activity/email/?lead_id=${lead.id}`;
   const activity = getJsonUrl(url);
@@ -165,7 +165,7 @@ function getEmailActivityForLead(lead, done) {
   }
 }
 
-function getActivityForLead(lead, done) {
+function getActivityForLead(lead) {
   const lead_id = lead.id || lead;
   const url = `https://${closeIoApiKey}:X@app.close.io/api/v1/activity/?lead_id=${lead.id}`;
   const activity = getJsonUrl(url);
@@ -203,40 +203,38 @@ function postTask(postData) {
 
 // ** Close.io logic
 
-function sendMail(toEmail, leadId, contactId, template, emailApiKey, delayMinutes, done) {
+function sendMail(toEmail, leadId, contactId, template, emailApiKey, delayMinutes) {
   // console.log('DEBUG: sendMail', toEmail, leadId, contactId, template, emailApiKey, delayMinutes);
 
   // Check for previously sent email
-  
-  getEmailActivityForLead(leadId, (data) => {
-    if (!data) { return done() };
-    for (const emailData of data.data) {
-      if (!isSameEmailTemplateType(emailData.template_id, template)) continue;
-      for (const email of emailData.to) {
-        if (email.toLowerCase() === toEmail.toLowerCase()) {
-          console.log("ERROR: sending duplicate email:", toEmail, leadId, contactId, template, emailData.contact_id);
-          return done();
-        }
+  const data = getEmailActivityForLead(leadId)
+  if (!data) { return };
+  for (const emailData of data.data) {
+    if (!isSameEmailTemplateType(emailData.template_id, template)) continue;
+    for (const email of emailData.to) {
+      if (email.toLowerCase() === toEmail.toLowerCase()) {
+        console.log("ERROR: sending duplicate email:", toEmail, leadId, contactId, template, emailData.contact_id);
+        return; //TODO: Do this checking outside of here instead of pretending we sent an email
       }
     }
+  }
 
-    // Send mail
-    const dateScheduled = new Date();
-    dateScheduled.setUTCMinutes(dateScheduled.getUTCMinutes() + delayMinutes);
-    const postData = {
-      to: [toEmail],
-      contact_id: contactId,
-      lead_id: leadId,
-      template_id: template,
-      status: 'scheduled',
-      date_scheduled: dateScheduled
-    };
-    try {
-      postEmailActivity(postData);
-    } catch {
-      throw(`Send email POST error for ${toEmail} ${leadId} ${contactId}`);
-    }
-  });
+  // Send mail
+  const dateScheduled = new Date();
+  dateScheduled.setUTCMinutes(dateScheduled.getUTCMinutes() + delayMinutes);
+  const postData = {
+    to: [toEmail],
+    contact_id: contactId,
+    lead_id: leadId,
+    template_id: template,
+    status: 'scheduled',
+    date_scheduled: dateScheduled
+  };
+  try {
+    postEmailActivity(postData);
+  } catch {
+    throw(`Send email POST error for ${toEmail} ${leadId} ${contactId}`);
+  }
 }
 
 function updateLeadStatus(lead, status, done) {
@@ -333,29 +331,27 @@ function createSendFollowupMailFn(userApiKeyMap, latestDate, lead, contactEmails
             return done();
           }
           // console.log(`TODO: ${firstMailActivity.to[0]} ${lead.id} ${firstMailActivity.contact_id} ${template} ${userApiKeyMap[firstMailActivity.user_id]}`);
-          sendMail(firstMailActivity.to[0], lead.id, firstMailActivity.contact_id, template, userApiKeyMap[firstMailActivity.user_id], 0, (err) => {
-            if (err) return done(err);
+          sendMail(firstMailActivity.to[0], lead.id, firstMailActivity.contact_id, template, userApiKeyMap[firstMailActivity.user_id], 0);
 
-            // TODO: some sort of callback problem that stops the series here
+          // TODO: some sort of callback problem that stops the series here
 
-            // TODO: manage this status mapping better
-            const statusMap = {
-              "Auto Attempt 1": "Auto Attempt 2",
-              "New US Schools Auto Attempt 1": "New US Schools Auto Attempt 2",
-              "Inbound AU Auto Attempt 1": "Inbound AU Auto Attempt 2",
-              "Inbound Canada Auto Attempt 1": "Inbound Canada Auto Attempt 2",
-              "Inbound NZ Auto Attempt 1": "Inbound NZ Auto Attempt 2",
-              "Inbound UK Auto Attempt 1": "Inbound UK Auto Attempt 1 2",
-            }
-            const newStatus = statusMap[lead.status_label]
-            if (newStatus) {
-              return updateLeadStatus(lead, newStatus, done);
-            }
-            else {
-              console.log(`ERROR: unknown lead status ${lead.id} ${lead.status_label}`)
-              return done();
-            }
-          });
+          // TODO: manage this status mapping better
+          const statusMap = {
+            "Auto Attempt 1": "Auto Attempt 2",
+            "New US Schools Auto Attempt 1": "New US Schools Auto Attempt 2",
+            "Inbound AU Auto Attempt 1": "Inbound AU Auto Attempt 2",
+            "Inbound Canada Auto Attempt 1": "Inbound Canada Auto Attempt 2",
+            "Inbound NZ Auto Attempt 1": "Inbound NZ Auto Attempt 2",
+            "Inbound UK Auto Attempt 1": "Inbound UK Auto Attempt 1 2",
+          }
+          const newStatus = statusMap[lead.status_label]
+          if (newStatus) {
+            return updateLeadStatus(lead, newStatus, done);
+          }
+          else {
+            console.log(`ERROR: unknown lead status ${lead.id} ${lead.status_label}`)
+            return done();
+          }
         }
         else {
           // console.log(`Found recent activity after auto1 mail for ${lead.id}`);
