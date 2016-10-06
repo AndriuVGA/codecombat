@@ -7,7 +7,7 @@ describe '/scripts/sales/followupCloseIoLeads', ->
       withEmails: { emails: [
         {
           type: 'office'
-          email: 'firstname.lastname@example.com'
+          email: 'Firstname.Lastname@example.com'
         }
         {
           type: 'office'
@@ -42,3 +42,8 @@ describe '/scripts/sales/followupCloseIoLeads', ->
 
     it 'returns false if the contact has no phone numbers', ->
       expect(followupCloseIoLeads.contactHasPhoneNumbers(@contacts.withoutEmailOrPhone)).toBe(false)
+
+  describe 'lowercaseEmailsForContact', ->
+    it 'returns a list of email addresses all in lower case', ->
+      correctResult = ['firstname.lastname@example.com', 'firstname.middle.lastname@example.com']
+      expect(followupCloseIoLeads.lowercaseEmailsForContact(@contacts.withEmails)).toEqual(correctResult)
