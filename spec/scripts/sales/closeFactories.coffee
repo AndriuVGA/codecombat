@@ -1,5 +1,6 @@
 _ = require 'lodash'
 moment = require 'moment'
+faker = require 'faker'
 
 makeTasksResult = (total_results) ->
   return {
@@ -31,8 +32,27 @@ makeLead = () ->
     status_label: 'Auto Attempt 1'
   }
 
+makeContact = ({ withEmails, withPhones } = {}) ->
+  contact = {}
+  if withPhones
+    phones = _.times Number(withPhones), ->
+      {
+        phone: faker.phone.phoneNumber()
+        type: faker.random.arrayElement(['office', 'work', 'mobile', 'direct'])
+      }
+    _.assign contact, {phones}
+  if withEmails
+    emails = _.times Number(withEmails), ->
+      {
+        email: faker.phone.phoneNumber()
+        type: 'office'
+      }
+    _.assign contact, {emails}
+  contact
+
 module.exports = {
   makeTasksResult
   makeActivityResult
   makeLead
+  makeContact
 }

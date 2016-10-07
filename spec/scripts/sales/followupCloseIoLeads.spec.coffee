@@ -33,25 +33,20 @@ describe '/scripts/sales/followupCloseIoLeads', ->
       ]}
       withoutEmailOrPhone: {}
     }
-    @leads = [{
-      tasks: [{}]
-    }]
-    @noTasks = {total_results: 0}
-    @tasks = {total_results: 1}
 
   describe 'contactHasEmailAddress', ->
     it 'returns true if the contact has any email addresses', ->
-      expect(followupCloseIoLeads.contactHasEmailAddress(@contacts.withEmails)).toBe(true)
+      expect(followupCloseIoLeads.contactHasEmailAddress(factories.makeContact({withEmails: true}))).toBe(true)
 
     it 'returns false if the contact has no email addresses', ->
-      expect(followupCloseIoLeads.contactHasEmailAddress(@contacts.withoutEmailOrPhone)).toBe(false)
+      expect(followupCloseIoLeads.contactHasEmailAddress(factories.makeContact())).toBe(false)
 
   describe 'contactHasPhoneNumbers', ->
     it 'returns true if the contact has any phone numbers', ->
-      expect(followupCloseIoLeads.contactHasPhoneNumbers(@contacts.withPhones)).toBe(true)
+      expect(followupCloseIoLeads.contactHasPhoneNumbers(factories.makeContact({withPhones: true}))).toBe(true)
 
     it 'returns false if the contact has no phone numbers', ->
-      expect(followupCloseIoLeads.contactHasPhoneNumbers(@contacts.withoutEmailOrPhone)).toBe(false)
+      expect(followupCloseIoLeads.contactHasPhoneNumbers(factories.makeContact())).toBe(false)
 
   describe 'lowercaseEmailsForContact', ->
     it 'returns a list of email addresses all in lower case', ->
