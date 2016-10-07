@@ -286,75 +286,74 @@ function createSendFollowupMailFn(userApiKeyMap, latestDate, lead, contactEmails
     // console.log("DEBUG: sendFollowupMail", lead.id);
 
     // Skip leads with tasks
-    getTasksForLead(lead, (results) => {
-      if (!results || results.total_results > 0) { return done() }
+    const tasks = getTasksForLead(lead);
+  
+    if (!tasks || tasks.total_results > 0) { return done() }
 
-      // Find all lead activities
-      getActivityForLead(lead, (results) => {
-        const auto1Emails = results.data.filter((activity) => {
-          return activity._type === 'Email'
-                 && contactEmails.indexOf(activity.to[0].toLowerCase()) >= 0
-                 && isTemplateAuto1(activity.template_id);
-        })
-        if (auto1Emails.length > 1) {
-          console.log(`ERROR: ${lead.id} sent multiple auto1 emails!?`);
-          return done();
-        }
-        const firstMailActivity = auto1Emails[0];
+    // Find all lead activities
+    const activities = getActivityForLead(lead);//TODO: use better variable names
+    const auto1Emails = activities.data.filter((activity) => {
+      return activity._type === 'Email'
+             && contactEmails.indexOf(activity.to[0].toLowerCase()) >= 0
+             && isTemplateAuto1(activity.template_id);
+    })
+    if (auto1Emails.length > 1) {
+      console.log(`ERROR: ${lead.id} sent multiple auto1 emails!?`);
+      return done();
+    }
+    const firstMailActivity = auto1Emails[0];
 
-        if (!firstMailActivity) {
-          console.log(`ERROR: No first auto mail sent for ${lead.id}`);
-          return done();
-        }
-        if (new Date(firstMailActivity.date_created) > latestDate) {
-          // console.log(`First auto mail too recent ${firstMailActivity.date_created} ${lead.id}`);
-          return done();
-        }
+    if (!firstMailActivity) {
+      console.log(`ERROR: No first auto mail sent for ${lead.id}`);
+      return done();
+    }
+    if (new Date(firstMailActivity.date_created) > latestDate) {
+      // console.log(`First auto mail too recent ${firstMailActivity.date_created} ${lead.id}`);
+      return done();
+    }
 
-        // Find activity since first auto mail, that's not email to a different contact's email
-        const recentActivity = results.data.find((activity) => {
-          return activity.id !== firstMailActivity.id
-                 && activity._type === 'Email'
-                 && contactEmails.indexOf(activity.to[0].toLowerCase()) < 0
-                 && new Date(activity.date_created) >= new Date(firstMailActivity.date_created)
-        })
+    // Find activity since first auto mail, that's not email to a different contact's email
+    const recentActivity = activities.data.find((activity) => {
+      return activity.id !== firstMailActivity.id
+             && activity._type === 'Email'
+             && contactEmails.indexOf(activity.to[0].toLowerCase()) < 0
+             && new Date(activity.date_created) >= new Date(firstMailActivity.date_created)
+    })
 
-        if (!recentActivity) {
-          let template = getRandomEmailTemplateAuto2(firstMailActivity.template_id);
-          if (!template) {
-            console.log(`ERROR: no auto2 template selected for ${lead.id} ${firstMailActivity.template_id}`);
-            return done();
-          }
-          // console.log(`TODO: ${firstMailActivity.to[0]} ${lead.id} ${firstMailActivity.contact_id} ${template} ${userApiKeyMap[firstMailActivity.user_id]}`);
-          sendMail(firstMailActivity.to[0], lead.id, firstMailActivity.contact_id, template, userApiKeyMap[firstMailActivity.user_id], 0);
+    if (!recentActivity) {
+      let template = getRandomEmailTemplateAuto2(firstMailActivity.template_id);
+      if (!template) {
+        console.log(`ERROR: no auto2 template selected for ${lead.id} ${firstMailActivity.template_id}`);
+        return done();
+      }
+      // console.log(`TODO: ${firstMailActivity.to[0]} ${lead.id} ${firstMailActivity.contact_id} ${template} ${userApiKeyMap[firstMailActivity.user_id]}`);
+      sendMail(firstMailActivity.to[0], lead.id, firstMailActivity.contact_id, template, userApiKeyMap[firstMailActivity.user_id], 0);
 
-          // TODO: some sort of callback problem that stops the series here
+      // TODO: some sort of callback problem that stops the series here
 
-          // TODO: manage this status mapping better
-          const statusMap = {
-            "Auto Attempt 1": "Auto Attempt 2",
-            "New US Schools Auto Attempt 1": "New US Schools Auto Attempt 2",
-            "Inbound AU Auto Attempt 1": "Inbound AU Auto Attempt 2",
-            "Inbound Canada Auto Attempt 1": "Inbound Canada Auto Attempt 2",
-            "Inbound NZ Auto Attempt 1": "Inbound NZ Auto Attempt 2",
-            "Inbound UK Auto Attempt 1": "Inbound UK Auto Attempt 1 2",
-          }
-          const newStatus = statusMap[lead.status_label]
-          if (newStatus) {
-            return updateLeadStatus(lead, newStatus, done);
-          }
-          else {
-            console.log(`ERROR: unknown lead status ${lead.id} ${lead.status_label}`)
-            return done();
-          }
-        }
-        else {
-          // console.log(`Found recent activity after auto1 mail for ${lead.id}`);
-          // console.log(firstMailActivity.template_id, recentActivity);
-          return done();
-        }
-      });
-    });
+      // TODO: manage this status mapping better
+      const statusMap = {
+        "Auto Attempt 1": "Auto Attempt 2",
+        "New US Schools Auto Attempt 1": "New US Schools Auto Attempt 2",
+        "Inbound AU Auto Attempt 1": "Inbound AU Auto Attempt 2",
+        "Inbound Canada Auto Attempt 1": "Inbound Canada Auto Attempt 2",
+        "Inbound NZ Auto Attempt 1": "Inbound NZ Auto Attempt 2",
+        "Inbound UK Auto Attempt 1": "Inbound UK Auto Attempt 1 2",
+      }
+      const newStatus = statusMap[lead.status_label]
+      if (newStatus) {
+        return updateLeadStatus(lead, newStatus, done);
+      }
+      else {
+        console.log(`ERROR: unknown lead status ${lead.id} ${lead.status_label}`)
+        return done();
+      }
+    }
+    else {
+      // console.log(`Found recent activity after auto1 mail for ${lead.id}`);
+      // console.log(firstMailActivity.template_id, recentActivity);
+      return done();
+    }
   };
 }
 
@@ -432,88 +431,85 @@ function createAddCallTaskFn(userApiKeyMap, latestDate, lead, email) {
     // console.log("DEBUG: addCallTask", lead.id);
 
     // Skip leads with tasks
-    getTasksForLead(lead, (results) => {
-      if (!results || results.total_results > 0) { return done(); }
+    const tasks = getTasksForLead(lead);
+    if (!tasks || tasks.total_results > 0) { return done(); }
 
-      // Find all lead activities
-      getActivityForLead(lead, (results) => {
-        if (!results) { return done() };
-        // Find second auto mail and status change
-        let secondMailActivity;
-        let statusUpdateActivity;
-        for (const activity of results.data) {
-          if (activity._type === 'Email' && activity.to[0] === email) {
-            if (isTemplateAuto2(activity.template_id)) {
-              if (secondMailActivity) {
-                  console.log(`ERROR: ${lead.id} sent multiple auto2 emails!?`);
-                  return done();
-              }
-              secondMailActivity = activity;
-            }
+    // Find all lead activities
+    const results = getActivityForLead(lead);
+    if (!results) { return done() };
+    // Find second auto mail and status change
+    let secondMailActivity;
+    let statusUpdateActivity;
+    for (const activity of results.data) {
+      if (activity._type === 'Email' && activity.to[0] === email) {
+        if (isTemplateAuto2(activity.template_id)) {
+          if (secondMailActivity) {
+              console.log(`ERROR: ${lead.id} sent multiple auto2 emails!?`);
+              return done();
           }
-          else if (activity._type === 'LeadStatusChange' && auto1Statuses.indexOf(activity.old_status_label) >= 0
-            && auto2Statuses.indexOf(activity.new_status_label) >= 0) {
-              statusUpdateActivity = activity;
-          }
+          secondMailActivity = activity;
         }
+      }
+      else if (activity._type === 'LeadStatusChange' && auto1Statuses.indexOf(activity.old_status_label) >= 0
+        && auto2Statuses.indexOf(activity.new_status_label) >= 0) {
+          statusUpdateActivity = activity;
+      }
+    }
 
-        if (!secondMailActivity) {
-          // console.log(`DEBUG: No auto2 mail sent for ${lead.id} ${email}`);
-          return done();
-        }
-        if (!statusUpdateActivity) {
-          console.log(`ERROR: No status update for ${lead.id} ${email}`);
-          return done();
-        }
-        if (new Date(secondMailActivity.date_created) > latestDate) {
-          // console.log(`DEBUG: Second auto mail too recent ${secondMailActivity.date_created} ${lead.id}`);
-          return done();
-        }
+    if (!secondMailActivity) {
+      // console.log(`DEBUG: No auto2 mail sent for ${lead.id} ${email}`);
+      return done();
+    }
+    if (!statusUpdateActivity) {
+      console.log(`ERROR: No status update for ${lead.id} ${email}`);
+      return done();
+    }
+    if (new Date(secondMailActivity.date_created) > latestDate) {
+      // console.log(`DEBUG: Second auto mail too recent ${secondMailActivity.date_created} ${lead.id}`);
+      return done();
+    }
 
-        // Find activity since second auto mail and status update
-        // Skip email to a different contact's email
-        // Skip note about different contact
-        let recentActivity;
-        for (const activity of results.data) {
-          if (activity.id === secondMailActivity.id) continue;
-          if (activity.id === statusUpdateActivity.id) continue;
-          if (new Date(secondMailActivity.date_created) > new Date(activity.date_created)) continue;
-          if (new Date(statusUpdateActivity.date_created) > new Date(activity.date_created)) continue;
-          if (activity._type === 'Note' && activity.note
-            && activity.note.indexOf('demo_email') >= 0 && activity.note.indexOf(email) < 0) {
-            // console.log(`DEBUG: Skipping ${lead.id} ${email} auto import note for different contact`);
-            // console.log(activity.note);
-            continue;
-          }
-          recentActivity = activity;
-          break;
-        }
+    // Find activity since second auto mail and status update
+    // Skip email to a different contact's email
+    // Skip note about different contact
+    let recentActivity;
+    for (const activity of results.data) {
+      if (activity.id === secondMailActivity.id) continue;
+      if (activity.id === statusUpdateActivity.id) continue;
+      if (new Date(secondMailActivity.date_created) > new Date(activity.date_created)) continue;
+      if (new Date(statusUpdateActivity.date_created) > new Date(activity.date_created)) continue;
+      if (activity._type === 'Note' && activity.note
+        && activity.note.indexOf('demo_email') >= 0 && activity.note.indexOf(email) < 0) {
+        // console.log(`DEBUG: Skipping ${lead.id} ${email} auto import note for different contact`);
+        // console.log(activity.note);
+        continue;
+      }
+      recentActivity = activity;
+      break;
+    }
 
-        // Create call task
-        if (!recentActivity) {
-          console.log(`DEBUG: adding call task for ${lead.id} ${email}`);
-          const postData = {
-            _type: "lead",
-            lead_id: lead.id,
-            assigned_to: secondMailActivity.user_id,
-            text: `Call ${email}`,
-            is_complete: false
-          };
-          
-          try {
-            postTask(postData);
-          } catch (error) {
-            throw(`Create call task POST error for ${email} ${lead.id}`);
-          }
-        }
-        else {
-          // console.log(`DEBUG: Found recent activity after auto2 mail for ${lead.id} ${email}`);
-          // console.log(recentActivity);
-          return done();
-        }
+    // Create call task
+    if (!recentActivity) {
+      console.log(`DEBUG: adding call task for ${lead.id} ${email}`);
+      const postData = {
+        _type: "lead",
+        lead_id: lead.id,
+        assigned_to: secondMailActivity.user_id,
+        text: `Call ${email}`,
+        is_complete: false
+      };
       
-      });
-    });
+      try {
+        postTask(postData);
+      } catch (error) {
+        throw(`Create call task POST error for ${email} ${lead.id}`);
+      }
+    }
+    else {
+      // console.log(`DEBUG: Found recent activity after auto2 mail for ${lead.id} ${email}`);
+      // console.log(recentActivity);
+      return done();
+    }
   }
 }
 
