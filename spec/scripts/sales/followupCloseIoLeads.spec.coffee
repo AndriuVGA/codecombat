@@ -1,4 +1,4 @@
-request = require '../../server/request'
+request = require 'request'
 followupCloseIoLeads = require '../../../scripts/sales/followupCloseIoLeads'
 
 describe '/scripts/sales/followupCloseIoLeads', ->
@@ -47,3 +47,44 @@ describe '/scripts/sales/followupCloseIoLeads', ->
     it 'returns a list of email addresses all in lower case', ->
       correctResult = ['firstname.lastname@example.com', 'firstname.middle.lastname@example.com']
       expect(followupCloseIoLeads.lowercaseEmailsForContact(@contacts.withEmails)).toEqual(correctResult)
+
+  describe 'network requests', ->
+    beforeEach ->
+      spyOn(request, 'getAsync')
+
+    describe 'getJsonUrl', ->
+      it 'calls request.getAsync with url and json: true', ->
+        url = 'http://example.com/model/id'
+        followupCloseIoLeads.getJsonUrl(url)
+        expect(request.getAsync.calls.argsFor(0)).toEqual([{
+          url: url,
+          json: true
+        }])
+
+    describe 'postJsonUrl', ->
+
+    describe 'putJsonUrl', ->
+
+    describe 'getSomeLeads', ->
+
+    describe 'getEmailActivityForLead', ->
+
+    describe 'getActivityForLead', ->
+
+    describe 'postEmailActivity', ->
+
+    describe 'postTask', ->
+
+    describe 'sendMail', ->
+
+    describe 'updateLeadStatus', ->
+
+    describe 'shouldSendNextAutoEmail', ->
+
+    describe 'createSendFollowupMailFn', ->
+
+    describe 'sendSecondFollowupMails', ->
+
+    describe 'createAddCallTaskFn', ->
+
+    describe 'addCallTasks', ->

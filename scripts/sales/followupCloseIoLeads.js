@@ -1,7 +1,7 @@
 // Follow up on Close.io leads
 
 'use strict';
-const wrap = require('co');
+const wrap = require('co').wrap;
 const request = require('request');
 const Promise = require('bluebird');
 Promise.promisifyAll(request)//, {multiArgs: true})
@@ -131,10 +131,24 @@ function lowercaseEmailsForContact(contact) {
 
 // ** Close.io network requests
 
-const getJsonUrl = wrap(function* (url) {
-  console.log("Gettin' a URL!", url);
+const getJsonUrl = wrap(function*(url){
   const response = yield request.getAsync({url:url, json: true});
-  console.log(response);
+  return response.body;
+})
+
+const postJsonUrl = wrap(function*(options){
+  const response = yield request.postAsync(options);
+  if (response.body.errors || response.body['field-errors']) {
+    throw(`ERROR: Close.io API returned an error.`);
+  }
+  return response.body;
+})
+
+const putJsonUrl = wrap(function*(options){
+  const response = yield request.putAsync(options);
+  if (response.body.errors || response.body['field-errors']) {
+    throw(`ERROR: Close.io API returned an error.`);
+  }
   return response.body;
 })
 
@@ -175,22 +189,6 @@ function getActivityForLead(lead) {
     return activity;
   }
 }
-
-const postJsonUrl = wrap(function*(options) {
-  const response = yield request.postAsync(options);
-  if (response.body.errors || response.body['field-errors']) {
-    throw(`ERROR: Close.io API returned an error.`);
-  }
-  return response.body;
-})
-
-const putJsonUrl = wrap(function*(options) {
-  const response = yield request.putAsync(options);
-  if (response.body.errors || response.body['field-errors']) {
-    throw(`ERROR: Close.io API returned an error.`);
-  }
-  return response.body;
-})
 
 function postEmailActivity(postData) {
   const options = {
@@ -586,6 +584,8 @@ if(module) {module.exports = {
   contactHasPhoneNumbers: contactHasPhoneNumbers,
   lowercaseEmailsForContact: lowercaseEmailsForContact,
   getJsonUrl: getJsonUrl,
+  postJsonUrl: postJsonUrl,
+  putJsonUrl: putJsonUrl,
   getSomeLeads: getSomeLeads,
   getTasksForLead: getTasksForLead,
   getEmailActivityForLead: getEmailActivityForLead,
