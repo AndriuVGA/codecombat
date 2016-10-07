@@ -2,13 +2,15 @@
 
 'use strict';
 const wrap = require('co').wrap;
+const async = require('async');
 const request = require('request');
 const Promise = require('bluebird');
-Promise.promisifyAll(request)//, {multiArgs: true})
+Promise.promisifyAll(request);
 
-if (process.argv.length !== 7) {
+const runAsScript = (process.argv.length === 7);
+if (!runAsScript) {
   log("Usage: node <script> <Close.io general API key> <Close.io mail API key1> <Close.io mail API key2> <Close.io mail API key3>");
-} else {
+}
 
 // TODO: Assumes 1:1 contact:email relationship (Close.io supports multiple emails for a single contact)
 // TODO: Duplicate lead lookups when checking per-email (e.g. existing tasks)
@@ -37,27 +39,26 @@ const demoRequestEmailTemplatesAuto2 = [
 const createTeacherInternationalEmailTemplatesAuto2 = ['tmpl_a6Syzzy6ri9MErfXQySM5UfaF5iNIv1VCArYowAEICT', 'tmpl_jOqWLgT0G19Eqs7qZaAeNwtiull7UrSX4ZuvkYRM2gC'];
 const demoRequestInternationalEmailTemplatesAuto2 = ['tmpl_wz4SnDZMjNmAhp3MIuZaSMmjJTy5IW75Rcy3MYGb6Ti', 'tmpl_5oJ0YQMZFqNi3DgW7hplD6JS2zHqkB4Gt7Fj1u19Nks'];
 
-const scriptStartTime = new Date();
-const closeIoApiKey = process.argv[2];
-const closeIoMailApiKeys = [process.argv[3], process.argv[4], process.argv[5], process.argv[6]]; // Automatic mails sent as API owners
-const async = require('async');
-const request = require('request');
-
+if(runAsScript){
+  const scriptStartTime = new Date();
+  const closeIoApiKey = process.argv[2];
+  const closeIoMailApiKeys = [process.argv[3], process.argv[4], process.argv[5], process.argv[6]]; // Automatic mails sent as API owners
+}
 const earliestDate = new Date();
 earliestDate.setUTCDate(earliestDate.getUTCDate() - 10);
 
 // ** Main program
 
-async.series([
-  sendSecondFollowupMails,
-  addCallTasks
-// TODO: Cancel call tasks
-],
-(err, results) => {
-  if (err) console.error(err);
-  log("Script runtime: " + (new Date() - scriptStartTime));
-});
-
+if (runAsScript){
+  async.series([
+    sendSecondFollowupMails,
+    addCallTasks
+  // TODO: Cancel call tasks
+  ],
+  (err, results) => {
+    if (err) console.error(err);
+    log("Script runtime: " + (new Date() - scriptStartTime));
+  });
 }
 
 // ** Utilities
@@ -284,16 +285,16 @@ function createSendFollowupMailFn(userApiKeyMap, latestDate, lead, contactEmails
     // console.log("DEBUG: sendFollowupMail", lead.id);
 
     // Skip leads with tasks
-    const tasks = getTasksForLead(lead);
+    const tasks = module.exports.getTasksForLead(lead);
   
     if (!tasks || tasks.total_results > 0) { return done() }
 
     // Find all lead activities
-    const activities = getActivityForLead(lead);//TODO: use better variable names
+    const activities = module.exports.getActivityForLead(lead);//TODO: use better variable names
     const auto1Emails = activities.data.filter((activity) => {
       return activity._type === 'Email'
              && contactEmails.indexOf(activity.to[0].toLowerCase()) >= 0
-             && isTemplateAuto1(activity.template_id);
+             && module.exports.isTemplateAuto1(activity.template_id);
     })
     if (auto1Emails.length > 1) {
       console.log(`ERROR: ${lead.id} sent multiple auto1 emails!?`);
@@ -319,13 +320,13 @@ function createSendFollowupMailFn(userApiKeyMap, latestDate, lead, contactEmails
     })
 
     if (!recentActivity) {
-      let template = getRandomEmailTemplateAuto2(firstMailActivity.template_id);
+      let template = module.exports.getRandomEmailTemplateAuto2(firstMailActivity.template_id);
       if (!template) {
         console.log(`ERROR: no auto2 template selected for ${lead.id} ${firstMailActivity.template_id}`);
         return done();
       }
       // console.log(`TODO: ${firstMailActivity.to[0]} ${lead.id} ${firstMailActivity.contact_id} ${template} ${userApiKeyMap[firstMailActivity.user_id]}`);
-      sendMail(firstMailActivity.to[0], lead.id, firstMailActivity.contact_id, template, userApiKeyMap[firstMailActivity.user_id], 0);
+      module.exports.sendMail(firstMailActivity.to[0], lead.id, firstMailActivity.contact_id, template, userApiKeyMap[firstMailActivity.user_id], 0);
 
       // TODO: some sort of callback problem that stops the series here
 
@@ -340,7 +341,7 @@ function createSendFollowupMailFn(userApiKeyMap, latestDate, lead, contactEmails
       }
       const newStatus = statusMap[lead.status_label]
       if (newStatus) {
-        return updateLeadStatus(lead, newStatus, done);
+        return done(module.exports.updateLeadStatus(lead, newStatus));
       }
       else {
         console.log(`ERROR: unknown lead status ${lead.id} ${lead.status_label}`)
@@ -429,7 +430,7 @@ function createAddCallTaskFn(userApiKeyMap, latestDate, lead, email) {
     // console.log("DEBUG: addCallTask", lead.id);
 
     // Skip leads with tasks
-    const tasks = getTasksForLead(lead);
+    const tasks = module.exports.getTasksForLead(lead);
     if (!tasks || tasks.total_results > 0) { return done(); }
 
     // Find all lead activities

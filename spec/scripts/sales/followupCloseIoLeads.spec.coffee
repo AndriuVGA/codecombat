@@ -1,8 +1,13 @@
 request = require 'request'
+moment = require 'moment'
 followupCloseIoLeads = require '../../../scripts/sales/followupCloseIoLeads'
+factories = require './closeFactories'
 
 describe '/scripts/sales/followupCloseIoLeads', ->
   beforeEach ->
+    spyOn(request, 'getAsync')
+    spyOn(request, 'putAsync')
+    spyOn(request, 'postAsync')
     @contacts = {
       withEmails: { emails: [
         {
@@ -28,6 +33,11 @@ describe '/scripts/sales/followupCloseIoLeads', ->
       ]}
       withoutEmailOrPhone: {}
     }
+    @leads = [{
+      tasks: [{}]
+    }]
+    @noTasks = {total_results: 0}
+    @tasks = {total_results: 1}
 
   describe 'contactHasEmailAddress', ->
     it 'returns true if the contact has any email addresses', ->
@@ -48,10 +58,7 @@ describe '/scripts/sales/followupCloseIoLeads', ->
       correctResult = ['firstname.lastname@example.com', 'firstname.middle.lastname@example.com']
       expect(followupCloseIoLeads.lowercaseEmailsForContact(@contacts.withEmails)).toEqual(correctResult)
 
-  describe 'network requests', ->
-    beforeEach ->
-      spyOn(request, 'getAsync')
-
+  describe 'general network requests', ->
     describe 'getJsonUrl', ->
       it 'calls request.getAsync with url and json: true', ->
         url = 'http://example.com/model/id'
@@ -64,6 +71,12 @@ describe '/scripts/sales/followupCloseIoLeads', ->
     describe 'postJsonUrl', ->
 
     describe 'putJsonUrl', ->
+
+  describe 'Close.io API requests', ->
+    beforeEach ->
+      spyOn(followupCloseIoLeads, 'getJsonUrl')
+      spyOn(followupCloseIoLeads, 'postJsonUrl')
+      spyOn(followupCloseIoLeads, 'putJsonUrl')
 
     describe 'getSomeLeads', ->
 
@@ -80,8 +93,54 @@ describe '/scripts/sales/followupCloseIoLeads', ->
     describe 'updateLeadStatus', ->
 
     describe 'shouldSendNextAutoEmail', ->
+      it 'TODO'
 
     describe 'createSendFollowupMailFn', ->
+      beforeEach ->
+        spyOn(followupCloseIoLeads, 'sendMail')
+        spyOn(followupCloseIoLeads, 'getTasksForLead').and.returnValue(factories.makeTasksResult(0))
+
+      describe 'when we have sent an auto1 email', ->
+        beforeEach ->
+          spyOn(followupCloseIoLeads, 'isTemplateAuto1').and.returnValue(true)
+
+        describe 'more than 3 days ago', ->
+          beforeEach ->
+            spyOn(followupCloseIoLeads, 'getActivityForLead').and.returnValue(factories.makeActivityResult({ auto1: true }))
+            spyOn(followupCloseIoLeads, 'getRandomEmailTemplateAuto2').and.returnValue('template_auto2')
+            spyOn(followupCloseIoLeads, 'updateLeadStatus')
+            # spyOn(followupCloseIoLeads, '')
+
+          describe "and they haven't responded to the first auto-email", ->
+            it "sends a followup auto-email", (done) ->
+              userApiKeyMap = {close_user_1: 'close_io_mail_key'}
+              lead = factories.makeLead({ auto1: true })
+              contactEmails = ['teacher1@example.com', 'teacher1.fullname@example.com']
+              followupCloseIoLeads.createSendFollowupMailFn(userApiKeyMap, moment().subtract(3, 'days').toDate(), lead, contactEmails)( =>
+                expect(followupCloseIoLeads.sendMail).toHaveBeenCalled()
+                expect(followupCloseIoLeads.updateLeadStatus).toHaveBeenCalled()
+                done()
+              )
+
+        describe 'in the last 3 days', ->
+          beforeEach ->
+            spyOn(followupCloseIoLeads, 'getActivityForLead').and.returnValue(factories.makeActivityResult({ auto1: { date_created: new Date() } }))
+            spyOn(followupCloseIoLeads, 'getRandomEmailTemplateAuto2')
+            spyOn(followupCloseIoLeads, 'updateLeadStatus').and.callFake
+
+          it "doesn't send a followup email or update the lead's status", (done) ->
+            userApiKeyMap = {close_user_1: 'close_io_mail_key'}
+            lead = factories.makeLead({ auto1: true })
+            contactEmails = ['teacher1@example.com', 'teacher1.fullname@example.com']
+            followupCloseIoLeads.createSendFollowupMailFn(userApiKeyMap, moment().subtract(3, 'days'), lead, contactEmails)( =>
+              expect(followupCloseIoLeads.sendMail).not.toHaveBeenCalled()
+              expect(followupCloseIoLeads.updateLeadStatus).not.toHaveBeenCalled()
+              done()
+            )
+
+
+
+
 
     describe 'sendSecondFollowupMails', ->
 
