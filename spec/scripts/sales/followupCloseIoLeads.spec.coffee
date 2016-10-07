@@ -50,8 +50,9 @@ describe '/scripts/sales/followupCloseIoLeads', ->
 
   describe 'lowercaseEmailsForContact', ->
     it 'returns a list of email addresses all in lower case', ->
-      correctResult = ['firstname.lastname@example.com', 'firstname.middle.lastname@example.com']
-      expect(followupCloseIoLeads.lowercaseEmailsForContact(@contacts.withEmails)).toEqual(correctResult)
+      contactEmails = ['Firstname.Lastname@example.com', 'firstname.middle.lastname@example.com']
+      lowercaseContactEmails = ['firstname.lastname@example.com', 'firstname.middle.lastname@example.com']
+      expect(followupCloseIoLeads.lowercaseEmailsForContact(factories.makeContact({withEmails: contactEmails}))).toEqual(lowercaseContactEmails)
 
   describe 'general network requests', ->
     describe 'getJsonUrl', ->
@@ -88,7 +89,30 @@ describe '/scripts/sales/followupCloseIoLeads', ->
     describe 'updateLeadStatus', ->
 
     describe 'shouldSendNextAutoEmail', ->
-      it 'TODO'
+      beforeEach ->
+        @lead = {id: 'lead_1'}
+        @contact = factories.makeContact({ withEmails: 2 })
+
+      describe "we haven't even sent them a first email", ->
+        beforeEach ->
+          spyOn(followupCloseIoLeads, 'getActivityForLead').and.returnValue(factories.makeActivityResult())
+
+        it 'TODO', ->
+          expect(followupCloseIoLeads.shouldSendNextAutoEmail(@lead, @contact)).toBe(false)
+
+      describe "they haven't sent us any email", ->
+        beforeEach ->
+          spyOn(followupCloseIoLeads, 'getActivityForLead').and.returnValue(factories.makeActivityResult({ auto1: {to: [@contact.emails[0].email]}, they_replied: false }))
+
+        it 'TODO', ->
+          expect(followupCloseIoLeads.shouldSendNextAutoEmail(@lead, @contact)).toBe(true)
+
+      describe "they have sent us an email", ->
+        beforeEach ->
+          spyOn(followupCloseIoLeads, 'getActivityForLead').and.returnValue(factories.makeActivityResult({ auto1: {to: [@contact.emails[0].email]}, they_replied: {to: ['sales_1@codecombat.com'], sender: "Some User <#{@contact.emails[0].email}>"} }))
+
+        it 'TODO', ->
+          expect(followupCloseIoLeads.shouldSendNextAutoEmail(@lead, @contact)).toBe(false)
 
     describe 'createSendFollowupMailFn', ->
       beforeEach ->
@@ -104,7 +128,6 @@ describe '/scripts/sales/followupCloseIoLeads', ->
             spyOn(followupCloseIoLeads, 'getActivityForLead').and.returnValue(factories.makeActivityResult({ auto1: true }))
             spyOn(followupCloseIoLeads, 'getRandomEmailTemplateAuto2').and.returnValue('template_auto2')
             spyOn(followupCloseIoLeads, 'updateLeadStatus')
-            # spyOn(followupCloseIoLeads, '')
 
           describe "and they haven't responded to the first auto-email", ->
             it "sends a followup auto-email", (done) ->
@@ -132,10 +155,6 @@ describe '/scripts/sales/followupCloseIoLeads', ->
               expect(followupCloseIoLeads.updateLeadStatus).not.toHaveBeenCalled()
               done()
             )
-
-
-
-
 
     describe 'sendSecondFollowupMails', ->
 

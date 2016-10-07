@@ -258,14 +258,14 @@ function updateLeadStatus(lead, status) {
 }
 
 function shouldSendNextAutoEmail(lead, contact) {
-  const activity = getActivityForLead(lead);
-  if(!activity) {
-    console.log(`No activities found for lead ${lead.id} — will not try to sent more auto-emails.`);
+  const activities = module.exports.getActivityForLead(lead);
+  if(!activities || !activities.data || !(activities.data.length > 0)) {
+    console.log(`No activities found for lead ${lead.id} — will not try to send more auto-emails.`);
     return false;
   }
-  activity.data.sort((a,b) => { return new Date(a.date_updated) < new Date(b.date_updated) });
-  const emails = activity.filter((act) => { return act._type === 'Email' });
-  const emailAddresses = lowercaseEmailsForContact(contact);
+  activities.data.sort((a,b) => { return new Date(a.date_updated) < new Date(b.date_updated) });
+  const emails = activities.data.filter((act) => { return act._type === 'Email' });
+  const emailAddresses = module.exports.lowercaseEmailsForContact(contact);
   const they_have_replied = emails.some((emailData) => {
     return emailAddresses.some((emailAddress) => {
       return emailData.sender.match(new RegExp(emailAddress, 'i'));
@@ -278,7 +278,7 @@ function shouldSendNextAutoEmail(lead, contact) {
 
 function createSendFollowupMailFn(userApiKeyMap, latestDate, lead, contactEmails) {
   // Find first auto mail
-  // Find activity since first auto mail
+  // Find activities since first auto mail
   // Send send auto mail of same template type (create or demo) from same user who sent first email
   // Update status to Auto Attempt 2 or New US Schools Auto Attempt 2
   return (done) => {
@@ -286,7 +286,7 @@ function createSendFollowupMailFn(userApiKeyMap, latestDate, lead, contactEmails
 
     // Skip leads with tasks
     const tasks = module.exports.getTasksForLead(lead);
-  
+
     if (!tasks || tasks.total_results > 0) { return done() }
 
     // Find all lead activities
@@ -497,7 +497,7 @@ function createAddCallTaskFn(userApiKeyMap, latestDate, lead, email) {
         text: `Call ${email}`,
         is_complete: false
       };
-      
+
       try {
         postTask(postData);
       } catch (error) {
