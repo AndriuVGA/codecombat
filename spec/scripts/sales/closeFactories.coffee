@@ -46,10 +46,35 @@ makeStatusChangeActivity = (status) ->
     new_status_label: status
   }
 
-makeLead = () ->
-  return {
-    id: 'lead_1'
-    status_label: 'Auto Attempt 1'
+# TODO: Add options for status, different contact info
+makeLead = ({auto1, auto2} = {}) ->
+  if auto1
+    return {
+      id: 'lead_1'
+      status_label: 'Auto Attempt 1'
+      contacts: [makeContact({ withEmails: true, withPhones: true })]
+    }
+  else if auto2
+    return {
+      id: 'lead_1'
+      status_label: 'Auto Attempt 2'
+      contacts: [makeContact({ withEmails: true, withPhones: true })]
+    }
+  else
+    return {
+      id: 'lead_1'
+      status_label: 'Not Attempted'
+      contacts: [makeContact({ withEmails: true, withPhones: true })]
+    }
+
+
+makeLeadsResult = () ->
+  {
+    total_results: 1
+    has_more: false
+    data: [
+      makeLead()
+    ]
   }
 
 # withEmails: true, false, a number of fake email addresses to generate, or array of email addresses to use
@@ -75,5 +100,6 @@ module.exports = {
   makeTasksResult
   makeActivityResult
   makeLead
+  makeLeadsResult
   makeContact
 }
