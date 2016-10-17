@@ -9,7 +9,7 @@ makeTasksResult = (total_results) ->
     data: []
   }
 
-makeActivityResult = ({ auto1, they_replied } = {}) ->
+makeActivityResult = ({ auto1, auto2, they_replied } = {}) ->
   activities = []
   if auto1
     activity = {
@@ -18,11 +18,23 @@ makeActivityResult = ({ auto1, they_replied } = {}) ->
       sender: 'Sales McClose <sales_1@codecombat.com>'
       _type: 'Email'
       template_id: 'template_auto1' # TODO: Be less magical. (This is in createTeacherEmailTemplatesAuto1)
-      date_created: moment().subtract(4, 'days').toDate()
+      date_created: moment().subtract(7, 'days').toDate()
     }
     _.assign(activity, auto1) if _.isObject(auto1)
     activities.push activity
     activities.push makeStatusChangeActivity('Auto Attempt 1')
+  if auto2
+    activity = {
+      id: 'acti_'+faker.random.uuid()
+      to: ['teacher1@example.com']
+      sender: 'Sales McClose <sales_1@codecombat.com>'
+      _type: 'Email'
+      template_id: 'template_auto2' # TODO: Be less magical. (This is in createTeacherEmailTemplatesAuto1)
+      date_created: moment().subtract(4, 'days').toDate()
+    }
+    _.assign(activity, auto2) if _.isObject(auto2)
+    activities.push activity
+    activities.push makeStatusChangeActivity('Auto Attempt 2', 'Auto Attempt 1')
   if they_replied
     activity = {
       id: 'acti_'+faker.random.uuid()
@@ -38,12 +50,14 @@ makeActivityResult = ({ auto1, they_replied } = {}) ->
     data: activities
   }
 
-makeStatusChangeActivity = (status) ->
+makeStatusChangeActivity = (status, oldStatus) ->
   {
     id: 'acti_'+faker.random.uuid()
     _type: 'LeadStatusChange'
     user_id: 'close_user_0'
     new_status_label: status
+    old_status_label: oldStatus
+    date_created: moment().subtract(7, 'days')
   }
 
 # TODO: Add options for status, different contact info

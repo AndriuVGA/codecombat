@@ -46,9 +46,9 @@ describe '/scripts/sales/followupCloseIoLeads', ->
 
   describe 'Close.io API requests', ->
     beforeEach ->
-      spyOn(followupCloseIoLeads, 'getJsonUrl')
-      spyOn(followupCloseIoLeads, 'postJsonUrl')
-      spyOn(followupCloseIoLeads, 'putJsonUrl')
+      spyOn(followupCloseIoLeads, 'getJsonUrl').and.returnValue(Promise.resolve())
+      spyOn(followupCloseIoLeads, 'postJsonUrl').and.returnValue(Promise.resolve())
+      spyOn(followupCloseIoLeads, 'putJsonUrl').and.returnValue(Promise.resolve())
 
     describe 'getSomeLeads', ->
 
@@ -71,29 +71,35 @@ describe '/scripts/sales/followupCloseIoLeads', ->
 
       describe "we haven't even sent them a first email", ->
         beforeEach ->
-          spyOn(followupCloseIoLeads, 'getActivityForLead').and.returnValue(factories.makeActivityResult())
+          spyOn(followupCloseIoLeads, 'getActivityForLead').and.returnValue(Promise.resolve(factories.makeActivityResult()))
 
-        it 'TODO', ->
-          expect(followupCloseIoLeads.shouldSendNextAutoEmail(@lead, @contact)).toBe(false)
+        it 'TODO', (done) ->
+          followupCloseIoLeads.shouldSendNextAutoEmail(@lead, @contact).then (result) =>
+            expect(result).toBe(false)
+            done()
 
       describe "they haven't sent us any email", ->
         beforeEach ->
-          spyOn(followupCloseIoLeads, 'getActivityForLead').and.returnValue(factories.makeActivityResult({ auto1: {to: [@contact.emails[0].email]}, they_replied: false }))
+          spyOn(followupCloseIoLeads, 'getActivityForLead').and.returnValue(Promise.resolve(factories.makeActivityResult({ auto1: {to: [@contact.emails[0].email]}, they_replied: false })))
 
-        it 'TODO', ->
-          expect(followupCloseIoLeads.shouldSendNextAutoEmail(@lead, @contact)).toBe(true)
+        it 'TODO', (done) ->
+          followupCloseIoLeads.shouldSendNextAutoEmail(@lead, @contact).then (result) =>
+            expect(result).toBe(true)
+            done()
 
       describe "they have sent us an email", ->
         beforeEach ->
-          spyOn(followupCloseIoLeads, 'getActivityForLead').and.returnValue(factories.makeActivityResult({ auto1: {to: [@contact.emails[0].email]}, they_replied: {to: ['sales_1@codecombat.com'], sender: "Some User <#{@contact.emails[0].email}>"} }))
-
-        it 'TODO', ->
-          expect(followupCloseIoLeads.shouldSendNextAutoEmail(@lead, @contact)).toBe(false)
+          spyOn(followupCloseIoLeads, 'getActivityForLead').and.returnValue(Promise.resolve(factories.makeActivityResult({ auto1: {to: [@contact.emails[0].email]}, they_replied: {to: ['sales_1@codecombat.com'], sender: "Some User <#{@contact.emails[0].email}>"} })))
+        it 'TODO', (done) ->
+          followupCloseIoLeads.shouldSendNextAutoEmail(@lead, @contact).then (result) =>
+            expect(result).toBe(false)
+            done()
 
     describe 'createSendFollowupMailFn', ->
       beforeEach ->
-        spyOn(followupCloseIoLeads, 'sendMail')
+        spyOn(followupCloseIoLeads, 'sendMail').and.returnValue(Promise.resolve())
         spyOn(followupCloseIoLeads, 'getTasksForLead').and.returnValue(factories.makeTasksResult(0))
+        spyOn(followupCloseIoLeads, 'updateLeadStatus').and.returnValue(Promise.resolve())
 
       describe 'when we have sent an auto1 email', ->
         beforeEach ->
@@ -101,9 +107,8 @@ describe '/scripts/sales/followupCloseIoLeads', ->
 
         describe 'more than 3 days ago', ->
           beforeEach ->
-            spyOn(followupCloseIoLeads, 'getActivityForLead').and.returnValue(factories.makeActivityResult({ auto1: true }))
+            spyOn(followupCloseIoLeads, 'getActivityForLead').and.returnValue(Promise.resolve(factories.makeActivityResult({ auto1: true })))
             spyOn(followupCloseIoLeads, 'getRandomEmailTemplateAuto2').and.returnValue('template_auto2')
-            spyOn(followupCloseIoLeads, 'updateLeadStatus')
 
           describe "and they haven't responded to the first auto-email", ->
             it "sends a followup auto-email", (done) ->
@@ -118,9 +123,8 @@ describe '/scripts/sales/followupCloseIoLeads', ->
 
         describe 'in the last 3 days', ->
           beforeEach ->
-            spyOn(followupCloseIoLeads, 'getActivityForLead').and.returnValue(factories.makeActivityResult({ auto1: { date_created: new Date() } }))
+            spyOn(followupCloseIoLeads, 'getActivityForLead').and.returnValue(Promise.resolve(factories.makeActivityResult({ auto1: { date_created: new Date() } })))
             spyOn(followupCloseIoLeads, 'getRandomEmailTemplateAuto2')
-            spyOn(followupCloseIoLeads, 'updateLeadStatus').and.callFake
 
           it "doesn't send a followup email or update the lead's status", (done) ->
             userApiKeyMap = {close_user_1: 'close_io_mail_key'}
@@ -138,9 +142,9 @@ describe '/scripts/sales/followupCloseIoLeads', ->
           'close_io_mail_key_1': 'close_user_1'
           'close_io_mail_key_2': 'close_user_2'
         }
-        spyOn(followupCloseIoLeads, 'getUserIdByApiKey').and.callFake((key) -> apiKeyMap[key])
-        spyOn(followupCloseIoLeads, 'getSomeLeads').and.returnValue(factories.makeLeadsResult())
-        spyOn(followupCloseIoLeads, 'shouldSendNextAutoEmail').and.returnValue(true)
+        spyOn(followupCloseIoLeads, 'getUserIdByApiKey').and.callFake((key) -> Promise.resolve(apiKeyMap[key]))
+        spyOn(followupCloseIoLeads, 'getSomeLeads').and.returnValue(Promise.resolve(factories.makeLeadsResult()))
+        spyOn(followupCloseIoLeads, 'shouldSendNextAutoEmail').and.returnValue(Promise.resolve(true))
         spyOn(followupCloseIoLeads, 'createSendFollowupMailFn').and.returnValue((done)->done())
         spyOn(followupCloseIoLeads, 'closeIoMailApiKeys').and.returnValue(['close_io_mail_key_1', 'close_io_mail_key_2'])
 
@@ -153,19 +157,34 @@ describe '/scripts/sales/followupCloseIoLeads', ->
     describe 'createAddCallTaskFn', ->
       beforeEach ->
         spyOn(followupCloseIoLeads, 'sendMail')
-        spyOn(followupCloseIoLeads, 'getTasksForLead').and.returnValue(factories.makeTasksResult(0))
-        spyOn(followupCloseIoLeads, 'getActivityForLead').and.returnValue(factories.makeActivityResult({ auto1: true }))
-        spyOn(followupCloseIoLeads, 'isTemplateAuto2').and.returnValue(true)
-        spyOn(followupCloseIoLeads, 'postTask')
+        spyOn(followupCloseIoLeads, 'getTasksForLead').and.returnValue(Promise.resolve(factories.makeTasksResult(0)))
+        spyOn(followupCloseIoLeads, 'getActivityForLead').and.returnValue(Promise.resolve(factories.makeActivityResult({ auto1: true, auto2: true })))
+        spyOn(followupCloseIoLeads, 'isTemplateAuto2').and.callFake((template_id) -> template_id is 'template_auto2')
+        spyOn(followupCloseIoLeads, 'postTask').and.returnValue(Promise.resolve())
 
-      fit 'creates a call task', (done) ->
+      it 'creates a call task', (done) ->
         userApiKeyMap = {close_user_1: 'close_io_mail_key_1'}
         lead = factories.makeLead({ auto2: true })
-        contactEmails = ['teacher1@example.com', 'teacher1.fullname@example.com']
+        contactEmails = factories.makeContact({ withEmails: ['teacher1@example.com', 'teacher1.fullname@example.com'] })
         followupCloseIoLeads.createAddCallTaskFn(userApiKeyMap, moment().subtract(3, 'days'), lead, contactEmails)( =>
           expect(followupCloseIoLeads.postTask).toHaveBeenCalled()
-          console.log followupCloseIoLeads.postTask.mostRecentCall
           done()
         )
 
     describe 'addCallTasks', ->
+      beforeEach ->
+        apiKeyMap = {
+          'close_io_mail_key_1': 'close_user_1'
+          'close_io_mail_key_2': 'close_user_2'
+        }
+        spyOn(followupCloseIoLeads, 'getUserIdByApiKey').and.callFake((key) -> Promise.resolve(apiKeyMap[key]))
+        spyOn(followupCloseIoLeads, 'getSomeLeads').and.returnValue(Promise.resolve(factories.makeLeadsResult()))
+        spyOn(followupCloseIoLeads, 'contactHasEmailAddress').and.returnValue(true)
+        spyOn(followupCloseIoLeads, 'contactHasPhoneNumbers').and.returnValue(true)
+        spyOn(followupCloseIoLeads, 'createAddCallTaskFn').and.returnValue((done)->done())
+        spyOn(followupCloseIoLeads, 'closeIoMailApiKeys').and.returnValue(['close_io_mail_key_1', 'close_io_mail_key_2'])
+
+      it 'adds call tasks', (done) ->
+        followupCloseIoLeads.addCallTasks ->
+          expect(followupCloseIoLeads.createAddCallTaskFn).toHaveBeenCalled()
+          done()
