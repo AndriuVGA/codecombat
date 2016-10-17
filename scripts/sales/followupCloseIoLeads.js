@@ -42,14 +42,14 @@ const createTeacherInternationalEmailTemplatesAuto2 = ['tmpl_a6Syzzy6ri9MErfXQyS
 const demoRequestInternationalEmailTemplatesAuto2 = ['tmpl_wz4SnDZMjNmAhp3MIuZaSMmjJTy5IW75Rcy3MYGb6Ti', 'tmpl_5oJ0YQMZFqNi3DgW7hplD6JS2zHqkB4Gt7Fj1u19Nks'];
 
 if(runAsScript){
-  const scriptStartTime = new Date();
-  const closeIoApiKey = process.argv[2];
+  var scriptStartTime = new Date();
+  var closeIoApiKey = process.argv[2];
 }
 
 // TODO: Generalize this for other keys?
 // TODO:
 function closeIoMailApiKeys() {
-  [process.argv[3], process.argv[4], process.argv[5], process.argv[6]]; // Automatic mails sent as API owners
+  return [process.argv[3], process.argv[4], process.argv[5], process.argv[6]]; // Automatic mails sent as API owners
 }
 const earliestDate = new Date();
 earliestDate.setUTCDate(earliestDate.getUTCDate() - 10);
@@ -57,15 +57,19 @@ earliestDate.setUTCDate(earliestDate.getUTCDate() - 10);
 // ** Main program
 
 if (runAsScript){
-  async.series([
-    sendSecondFollowupMails,
-    addCallTasks
-  // TODO: Cancel call tasks
-  ],
-  (err, results) => {
-    if (err) console.error(err);
-    log("Script runtime: " + (new Date() - scriptStartTime));
-  });
+  console.log("Running as a script!");
+  setTimeout(()=>{
+    console.log(closeIoApiKey);
+    async.series([
+      sendSecondFollowupMails,
+      addCallTasks
+    // TODO: Cancel call tasks
+    ],
+    (err, results) => {
+      if (err) console.error(err);
+      log("Script runtime: " + (new Date() - scriptStartTime));
+    });
+  }, 0)
 }
 
 // ** Utilities
@@ -152,7 +156,10 @@ const getJsonUrl = wrap(function*(url){
 const postJsonUrl = wrap(function*(options){
   const response = yield request.postAsync(options);
   if (response.body.errors || response.body['field-errors']) {
-    throw(`ERROR: Close.io API returned an error.`);
+    throw(`ERROR: Close.io API returned an error (POST).`, {
+      errors: response.body.errors,
+      'field-errors': response.body['field-errors'],
+    });
   }
   return response.body;
 })
@@ -160,24 +167,27 @@ const postJsonUrl = wrap(function*(options){
 const putJsonUrl = wrap(function*(options){
   const response = yield request.putAsync(options);
   if (response.body.errors || response.body['field-errors']) {
-    throw(`ERROR: Close.io API returned an error.`);
+    throw(`ERROR: Close.io API returned an error (PUT). ` + JSON.stringify({
+      errors: response.body.errors,
+      'field-errors': response.body['field-errors'],
+    }));
   }
   return response.body;
 })
 
-function getSomeLeads (options) {
+const getSomeLeads = wrap(function* (options) {
   const getParams = '?' + Object.keys(options).map((key) => {
     return `${key}=${encodeURIComponent(options[key])}`;
   }).join('&')
   const url = `https://${closeIoApiKey}:X@app.close.io/api/v1/lead/${getParams}`;
-  return getJsonUrlAsync(url);
-}
+  return yield getJsonUrl(url);
+})
 
-function getTasksForLead (lead) {
+const getTasksForLead = wrap(function* (lead) {
   const lead_id = lead.id || lead;
   const url = `https://${closeIoApiKey}:X@app.close.io/api/v1/task/?lead_id=${lead.id}`;
-  return getJsonUrl(url);
-}
+  return yield getJsonUrl(url);
+})
 
 const getEmailActivityForLead = wrap(function* (lead) {
   const lead_id = lead.id || lead;
@@ -192,18 +202,18 @@ const getEmailActivityForLead = wrap(function* (lead) {
   }
 })
 
-function getActivityForLead(lead) {
+const getActivityForLead = wrap(function* (lead) {
   const lead_id = lead.id || lead;
   const url = `https://${closeIoApiKey}:X@app.close.io/api/v1/activity/?lead_id=${lead.id}`;
-  const activity = getJsonUrl(url);
+  const activity = yield getJsonUrl(url);
   if (activity.has_more) {
     throw(`ERROR: ${lead.id} has more activities than returned! Returning nothing instead.`);
   } else {
     return activity;
   }
-}
+})
 
-function postEmailActivity(postData) {
+function postEmailActivity(postData, emailApiKey) {
   const options = {
     uri: `https://${emailApiKey}:X@app.close.io/api/v1/activity/email/`,
     json: postData
@@ -249,9 +259,9 @@ const sendMail = wrap(function* (toEmail, leadId, contactId, template, emailApiK
     date_scheduled: dateScheduled
   };
   try {
-    return yield postEmailActivity(postData);
+    return yield postEmailActivity(postData, emailApiKey);
   } catch (error) {
-    throw(`Send email POST error for ${toEmail} ${leadId} ${contactId}`);
+    throw(`Send email POST error for ${toEmail} ${leadId} ${contactId}: `, error);
   }
 })
 
@@ -263,16 +273,17 @@ function updateLeadStatus(lead, status) {
     json: putData
   };
   try {
+    log('Updating lead status: ' + JSON.stringify({ lead: lead.id, status }));
     return putJsonUrl(options);
   } catch (error) {
-    throw(`Update existing lead status PUT error for ${lead.id}`);
+    throw(`Update existing lead status PUT error for ${lead.id}: ${error}`);
   }
 }
 
 const shouldSendNextAutoEmail = wrap(function* (lead, contact) {
   const activities = yield module.exports.getActivityForLead(lead);
   if(!activities || !activities.data || !(activities.data.length > 0)) {
-    module.exports.log(`No activities found for lead ${lead.id} — will not try to send more auto-emails.`);
+    log(`No activities found for lead ${lead.id} — shouldn't send them any more autos-emails`);
     return false;
   }
   activities.data.sort((a,b) => { return new Date(a.date_updated) < new Date(b.date_updated) });
@@ -285,6 +296,9 @@ const shouldSendNextAutoEmail = wrap(function* (lead, contact) {
   });
   // TODO: Stop auto-emails if we send them an email or call them.
   // const we_have_sent_manually = emails.some(function(email){ return ??? });
+  if (they_have_replied) {
+    log(`Email response found from ${emailAddresses} — shouldn't send them any more autos-emails.`);
+  }
   return !they_have_replied // && !we_have_sent_manually
 })
 
@@ -375,6 +389,7 @@ const getUserIdByApiKey = wrap(function* (apiKey) {
 })
 
 function sendSecondFollowupMails (done) {
+  log("Sending second followup emails...");
   // Find all leads with auto 1 status, created since earliestDate
   // log("DEBUG: sendSecondFollowupMails");
   const userApiKeyMap = {};
@@ -401,7 +416,7 @@ function sendSecondFollowupMails (done) {
       let has_more = false;
       const leadsResults = yield module.exports.getSomeLeads({ _skip: skip, _limit: limit, query: query });
       if (skip === 0) {
-        module.exports.log(`sendSecondFollowupMails total num leads ${leadsResults.total_results} has_more=${leadsResults.has_more}`);
+        log(`sendSecondFollowupMails total num leads ${leadsResults.total_results} has_more=${leadsResults.has_more}`);
       }
       has_more = leadsResults.has_more;
       const tasks = [];
@@ -415,7 +430,7 @@ function sendSecondFollowupMails (done) {
               tasks.push(module.exports.createSendFollowupMailFn(userApiKeyMap, latestDate, lead, contactEmails));
             }
             else {
-              log(`Not sending auto-email to lead ${lead.id} contact ${contact.id}`);
+              log(`Not sending auto-email to lead ${lead.id} contact ${contact.id} `);
             }
           }
           else {
@@ -587,7 +602,7 @@ function addCallTasks(done) {
   });
 }
 
-if(module) {module.exports = {
+module.exports = {
   getRandomEmailTemplateAuto2: getRandomEmailTemplateAuto2,
   getRandomEmailTemplate: getRandomEmailTemplate,
   isSameEmailTemplateType: isSameEmailTemplateType,
@@ -616,4 +631,4 @@ if(module) {module.exports = {
   addCallTasks: addCallTasks,
   // For stubbing API keys in testing:
   closeIoMailApiKeys: closeIoMailApiKeys,
-};}
+};
