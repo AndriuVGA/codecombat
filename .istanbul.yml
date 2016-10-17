@@ -1,3 +1,2 @@
 instrumentation:
-    root: .
-    excludes: ['./app', './bower_components', './bin', './headless_client', './mongo', './node_modules', './public', './spec', './test', './vendor', './report', './coverage']
+    root: ./server
