@@ -501,3 +501,40 @@ describe 'POST /db/course_instance/-/recent', ->
     [res, body] = yield request.postAsync(url, { json: true })
     expect(res.statusCode).toBe(403)
     done()
+
+describe 'GET /db/course_instance/:handle/my-course-level-sessions', ->
+
+  beforeEach utils.wrap (done) ->
+    yield utils.clearModels([CourseInstance, Course, User, Classroom, Campaign, Level])
+    @teacher = yield utils.initUser({role: 'teacher'})
+    admin = yield utils.initAdmin()
+    yield utils.loginUser(admin)
+    @level = yield utils.makeLevel({type: 'course'})
+    @campaign = yield utils.makeCampaign({}, {levels: [@level]})
+    @course = yield utils.makeCourse({free: true, releasePhase: 'released'}, {campaign: @campaign})
+    @student = yield utils.initUser({role: 'student'})
+    @prepaid = yield utils.makePrepaid({creator: @teacher.id})
+    members = [@student]
+    yield utils.loginUser(@teacher)
+    @classroom = yield utils.makeClassroom({aceConfig: { language: 'javascript' }}, { members })
+    @courseInstance = yield utils.makeCourseInstance({}, { @course, @classroom })
+    @session = yield utils.makeLevelSession({codeLanguage: 'javascript'}, {@level, creator: @student})
+    otherLevel = yield utils.makeLevel({type: 'course'})
+    
+    # sessions that should NOT be returned by this endpoint
+    otherSessions = yield [
+      utils.makeLevelSession({}, {@level, creator: @teacher})
+      utils.makeLevelSession({}, {@level, creator: admin})
+      utils.makeLevelSession({}, {level: otherLevel, creator: @student})
+      utils.makeLevelSession({codeLanguage: 'python'}, {@level, creator: @student})
+    ]
+    done()
+    
+  it 'returns all sessions for levels in that course for that classroom', utils.wrap (done) ->
+    url = utils.getURL("/db/course_instance/#{@courseInstance.id}/my-course-level-sessions")
+    yield utils.loginUser(@student)
+    [res, body] = yield request.getAsync({url, json: true})
+    expect(res.body.length).toBe(1)
+    expect(res.body[0]._id).toBe(@session.id)
+    done()
+    

@@ -185,3 +185,26 @@ module.exports =
     query = {$and: [{name: {$ne: 'Single Player'}}, {hourOfCode: {$ne: true}}]}
     courseInstances = yield CourseInstance.find(query, { members: 1, ownerID: 1}).lean()
     res.status(200).send(courseInstances)
+    
+  fetchMyCourseLevelSessions: wrap (req, res) ->
+    courseInstance = yield database.getDocFromHandle(req, CourseInstance)
+    if not courseInstance
+      throw new errors.NotFound('Course Instance not found.')
+
+    classroom = yield Classroom.findById(courseInstance.get('classroomID'))
+    if not classroom
+      throw new errors.NotFound('Classroom not found.')
+
+    levelIDs = []
+    for course in classroom.get('courses') when course._id.equals(courseInstance.get('courseID'))
+      for level in course.levels when not _.contains(level.type, 'ladder')
+        levelIDs.push(level.original + "")
+    query = {$and: [
+      {creator: req.user.id},
+      {'level.original': {$in: levelIDs}}
+      {codeLanguage: classroom.get('aceConfig.language')}
+    ]}
+    levelSessions = yield LevelSession.find(query).select(parse.getProjectFromReq(req))
+    res.send(session.toObject({req}) for session in levelSessions)
+
+

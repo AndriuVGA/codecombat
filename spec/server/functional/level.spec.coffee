@@ -4,6 +4,7 @@ Classroom = require '../../../server/models/Classroom'
 Course = require '../../../server/models/Course'
 CourseInstance = require '../../../server/models/CourseInstance'
 Level = require '../../../server/models/Level'
+LevelSession = require '../../../server/models/LevelSession'
 User = require '../../../server/models/User'
 request = require '../request'
 utils = require '../utils'
@@ -92,7 +93,7 @@ describe 'GET /db/level/:handle/session', ->
   describe 'when level IS a course level', ->
 
     beforeEach utils.wrap (done) ->
-      yield utils.clearModels([Campaign, Course, CourseInstance, Level, User])
+      yield utils.clearModels([Campaign, Course, CourseInstance, Level, User, LevelSession])
       admin = yield utils.initAdmin()
       yield utils.loginUser(admin)
       @level = yield utils.makeLevel({type: 'course'})
@@ -104,18 +105,18 @@ describe 'GET /db/level/:handle/session', ->
       @campaign = yield utils.makeCampaign({}, {levels: [@level]})
       @course = yield utils.makeCourse({free: true, releasePhase: 'released'}, {campaign: @campaign})
       @student = yield utils.initUser({role: 'student'})
-      members = [@student]
-      teacher = yield utils.initUser({role: 'teacher'})
-      yield utils.loginUser(teacher)
-      @classroom = yield utils.makeClassroom({aceConfig: { language: 'javascript' }}, { members })
-      @courseInstance = yield utils.makeCourseInstance({}, { @course, @classroom, members })
+      @members = [@student]
+      @teacher = yield utils.initUser({role: 'teacher'})
+      yield utils.loginUser(@teacher)
+      @classroom = yield utils.makeClassroom({aceConfig: { language: 'javascript' }}, { @members })
+      @courseInstance = yield utils.makeCourseInstance({}, { @course, @classroom, @members })
       @url = getURL("/db/level/#{@level.id}/session")
       yield utils.loginUser(@student)
       done()
       
     it 'creates a new session if the user is in a course with that level', utils.wrap (done) ->
       [res, body] = yield request.getAsync { uri: @url, json: true }
-      expect(res.statusCode).toBe(200)
+      expect(res.statusCode).toBe(201)
       expect(body.codeLanguage).toBe('javascript')
       done()
       
@@ -123,7 +124,7 @@ describe 'GET /db/level/:handle/session', ->
       @classroom.set('aceConfig', undefined)
       yield @classroom.save()
       [res, body] = yield request.getAsync { uri: @url, json: true }
-      expect(res.statusCode).toBe(200)
+      expect(res.statusCode).toBe(201)
       expect(body.codeLanguage).toBe('python')
       done()
       
@@ -140,6 +141,29 @@ describe 'GET /db/level/:handle/session', ->
       expect(res.statusCode).toBe(402)
       expect(res.body.message).toBe('You must be in a course which includes this level to play it')
       done()
+      
+    describe 'when courseInstance is included in the query', ->
+      it 'sets the language based on the related course', utils.wrap (done) ->
+        yield utils.loginUser(@teacher)
+        @pythonClassroom = yield utils.makeClassroom({aceConfig: { language: 'python' }}, { @members })
+        @pythonCourseInstance = yield utils.makeCourseInstance({}, { @course, classroom: @pythonClassroom, @members })
+        yield utils.loginUser(@student)
+        [res, body] = yield request.getAsync { uri: @url, qs: {courseInstance: @courseInstance.id}, json: true }
+        expect(res.statusCode).toBe(201)
+        javascriptSession = res.body
+        expect(javascriptSession.codeLanguage).toBe('javascript')
+        [res, body] = yield request.getAsync { uri: @url, qs: {courseInstance: @courseInstance.id}, json: true }
+        expect(res.statusCode).toBe(200)
+        expect(res.body._id).toBe(javascriptSession._id)
+        [res, body] = yield request.getAsync { uri: @url, qs: {courseInstance: @pythonCourseInstance.id}, json: true }
+        expect(res.statusCode).toBe(201)
+        pythonSession = res.body
+        expect(pythonSession.codeLanguage).toBe('python')
+        expect(pythonSession._id).not.toBe(javascriptSession._id)
+        [res, body] = yield request.getAsync { uri: @url, qs: {courseInstance: @pythonCourseInstance.id}, json: true }
+        expect(res.statusCode).toBe(200)
+        expect(res.body._id).toBe(pythonSession._id)
+        done()
       
     describe 'when the course is not free', ->
   
@@ -164,7 +188,7 @@ describe 'GET /db/level/:handle/session', ->
         })
         @student.save()
         [res, body] = yield request.getAsync({ uri: @url, json: true })
-        expect(res.statusCode).toBe(200)
+        expect(res.statusCode).toBe(201)
         done()
 
       it 'returns 402 if the user\'s license is expired', utils.wrap (done) ->
@@ -197,7 +221,7 @@ describe 'GET /db/level/:handle/session', ->
       
     it 'idempotently creates and returns a session for that level', utils.wrap (done) ->
       [res, body] = yield request.getAsync { uri: @url, json: true }
-      expect(res.statusCode).toBe(200)
+      expect(res.statusCode).toBe(201)
       sessionID = body._id
       [res, body] = yield request.getAsync { uri: @url, json: true }
       expect(body._id).toBe(sessionID)
@@ -213,22 +237,22 @@ describe 'GET /db/level/:handle/session', ->
         expect(res.statusCode).toBe(402)
         done()
         
-      it 'returns 200 for admins', utils.wrap (done) ->
+      it 'returns 201 for admins', utils.wrap (done) ->
         yield @player.update({$set: {permissions: ['admin']}})
         [res, body] = yield request.getAsync { uri: @url, json: true }
-        expect(res.statusCode).toBe(200)
+        expect(res.statusCode).toBe(201)
         done()
 
-      it 'returns 200 for adventurer levels', utils.wrap (done) ->
+      it 'returns 201 for adventurer levels', utils.wrap (done) ->
         yield @level.update({$set: {adventurer: true}})
         [res, body] = yield request.getAsync { uri: @url, json: true }
-        expect(res.statusCode).toBe(200)
+        expect(res.statusCode).toBe(201)
         done()
 
-      it 'returns 200 for subscribed users', utils.wrap (done) ->
+      it 'returns 201 for subscribed users', utils.wrap (done) ->
         yield @player.update({$set: {stripe: {free: true}}})
         [res, body] = yield request.getAsync { uri: @url, json: true }
-        expect(res.statusCode).toBe(200)
+        expect(res.statusCode).toBe(201)
         done()
         
         

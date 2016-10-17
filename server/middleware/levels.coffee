@@ -21,6 +21,19 @@ module.exports =
 
     if req.query.team?
       sessionQuery.team = req.query.team
+      
+    if req.query.courseInstance
+      courseInstance = yield CourseInstance.findById(req.query.courseInstance)
+      if not courseInstance
+        throw new errors.NotFound('Course Instance not found.')
+      if not _.find(courseInstance.get('members'), (memberID) -> memberID.equals(req.user._id))
+        throw new errors.Forbidden('You must be a member of the Course Instance.')
+      classroom = yield Classroom.findById(courseInstance.get('classroomID'))
+      if not classroom
+        throw new errors.NotFound('Classroom not found.')
+      language = classroom.get('aceConfig.language')
+      if language
+        sessionQuery.codeLanguage = language
 
     session = yield LevelSession.findOne(sessionQuery)
     if session
@@ -42,10 +55,16 @@ module.exports =
     if level.get('type') in ['course', 'course-ladder'] or req.query.course?
       
       # Find the course and classroom that has assigned this level, verify access
-      courseInstances = yield CourseInstance.find({members: req.user._id})
-      classroomIDs = (courseInstance.get('classroomID') for courseInstance in courseInstances)
-      classroomIDs = _.filter _.uniq classroomIDs, false, (objectID='') -> objectID.toString()
-      classrooms = yield Classroom.find({ _id: { $in: classroomIDs }})
+      # Handle either being given the courseInstance, or having to deduce it
+      if courseInstance and classroom
+        courseInstances = [courseInstance]
+        classrooms = [classroom]
+      else
+        courseInstances = yield CourseInstance.find({members: req.user._id})
+        classroomIDs = (courseInstance.get('classroomID') for courseInstance in courseInstances)
+        classroomIDs = _.filter _.uniq classroomIDs, false, (objectID='') -> objectID.toString()
+        classrooms = yield Classroom.find({ _id: { $in: classroomIDs }})
+
       classroomWithLevel = null
       courseID = null
       classroomMap = {}
@@ -82,4 +101,4 @@ module.exports =
         
     session = new LevelSession(attrs)
     yield session.save()
-    res.send(session.toObject({req: req}))
+    res.status(201).send(session.toObject({req: req}))
